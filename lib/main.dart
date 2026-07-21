@@ -133,17 +133,17 @@ void main() async {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     }
-    // Settings are separated from the isEmpty guard: background services (FCM,
-    // WorkManager, geofencing) may have pre-initialised Firebase without starting
-    // Firestore. We always try to set settings, catching the "already started"
-    // exception if a background service beat us to it.
-    if (!kIsWeb) {
-      try {
-        FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
-      } catch (_) {
-        // Firestore already started by a background isolate — existing settings apply.
-      }
-    }
+    // Do NOT assign FirebaseFirestore.instance.settings here.
+    //
+    // Persistence is already enabled by default on Android/iOS. Forcing settings
+    // from Dart races with native code (GeofenceReceiver / MainActivity assign
+    // flows) that call FirebaseFirestore.getInstance() first. When that happens the
+    // Flutter plugin cache-misses and re-calls setFirestoreSettings →
+    // "FirebaseFirestore has already been started and its settings can no longer
+    // be changed", and every subsequent read fails for the whole session.
+    //
+    // Native side registers the shared instance into the plugin cache via
+    // FlutterFirestoreCache.ensureRegistered() so getFirestoreFromPigeon is a hit.
     if (!kIsWeb) {
       FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterError;
       PlatformDispatcher.instance.onError = (error, stack) {

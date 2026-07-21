@@ -59,6 +59,10 @@ class GeofenceReceiver : BroadcastReceiver() {
                 }
 
                 val db = FirebaseFirestore.getInstance()
+                // Must run before any op that starts the client so Flutter's
+                // cloud_firestore plugin does not later call setFirestoreSettings
+                // on an already-started instance (session-wide Firestore outage).
+                FlutterFirestoreCache.ensureRegistered(db)
                 val empRef = db.collection("employees").document(clockNo)
 
                 // Transaction so we only write + log on a REAL transition. This keeps

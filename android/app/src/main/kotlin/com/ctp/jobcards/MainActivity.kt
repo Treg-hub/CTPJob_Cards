@@ -52,6 +52,12 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Register the default Firestore instance in the Flutter plugin cache
+        // *before* Dart issues queries. Native geofence / notification assign
+        // may have already called FirebaseFirestore.getInstance(); without this
+        // every Flutter read fails with "settings can no longer be changed".
+        FlutterFirestoreCache.ensureRegistered()
+
         // Cache the engine so GeofenceReceiver can call back into Dart when the app is
         // in the foreground (notifyDart inside GeofenceReceiver uses this cache).
         FlutterEngineCache.getInstance().put(GeofenceReceiver.FLUTTER_ENGINE_ID, flutterEngine)
@@ -373,6 +379,7 @@ class MainActivity : FlutterActivity() {
         }
 
         val db = FirebaseFirestore.getInstance()
+        FlutterFirestoreCache.ensureRegistered(db)
         db.collection("job_cards")
             .whereEqualTo("jobCardNumber", jobCardNumber.toIntOrNull())
             .limit(1)
@@ -441,7 +448,9 @@ class MainActivity : FlutterActivity() {
             userName = prefsName
         }
 
-        FirebaseFirestore.getInstance().collection("notifications").add(
+        val busyDb = FirebaseFirestore.getInstance()
+        FlutterFirestoreCache.ensureRegistered(busyDb)
+        busyDb.collection("notifications").add(
             mapOf(
                 "jobCardNumber" to jobCardNumber.toIntOrNull(),
                 "triggeredBy" to "busy",
@@ -472,7 +481,9 @@ class MainActivity : FlutterActivity() {
             userName = prefsName
         }
 
-        FirebaseFirestore.getInstance().collection("notifications").add(
+        val dismissDb = FirebaseFirestore.getInstance()
+        FlutterFirestoreCache.ensureRegistered(dismissDb)
+        dismissDb.collection("notifications").add(
             mapOf(
                 "jobCardNumber" to jobCardNumber.toIntOrNull(),
                 "triggeredBy" to "dismiss",
