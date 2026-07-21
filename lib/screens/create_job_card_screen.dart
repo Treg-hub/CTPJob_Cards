@@ -318,12 +318,12 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
 
       // Step 2: Create JobCard with the uploaded photo maps (now containing URLs)
       final session = writeAttributionEmployee ?? currentEmployee;
-      final normalizedPart = titleCaseWords(part);
-      part = normalizedPart;
-      _partController.value = _partController.value.copyWith(
-        text: normalizedPart,
-        selection: TextSelection.collapsed(offset: normalizedPart.length),
+      // Title-case for storage only — do not rewrite the controller here
+      // (copyWith can leave a stale IME composing range and assert).
+      final normalizedPart = titleCaseWords(
+        part.isNotEmpty ? part : _partController.text,
       );
+      part = normalizedPart;
 
       final jobCard = JobCard(
         department: selectedDepartment!,
@@ -559,6 +559,36 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
           );
         },
       ),
+    );
+  }
+
+  /// Apply title-case to the part field without leaving a stale IME composing
+  /// range (that assertion was the red-screen after caps landed).
+  void _applyPartTitleCase() {
+    final capped = titleCaseWords(_partController.text);
+    part = capped;
+    if (capped == _partController.text) return;
+    _partController.value = TextEditingValue(
+      text: capped,
+      selection: TextSelection.collapsed(offset: capped.length),
+    );
+  }
+
+  /// Shared part field (narrow + wide layouts) — one controller, one definition.
+  Widget _buildPartTextField() {
+    return TextFormField(
+      controller: _partController,
+      textCapitalization: TextCapitalization.words,
+      decoration: const InputDecoration(
+        labelText: 'Type part or tap suggestion above',
+        border: OutlineInputBorder(),
+      ),
+      onChanged: (v) => part = v,
+      onEditingComplete: () {
+        _applyPartTitleCase();
+        FocusScope.of(context).unfocus();
+      },
+      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
     );
   }
 
@@ -931,24 +961,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                               )).toList(),
                             ),
                           const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _partController,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: const InputDecoration(
-                              labelText: 'Type part or tap suggestion above',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (v) => part = v,
-                            onEditingComplete: () {
-                              final capped = titleCaseWords(_partController.text);
-                              part = capped;
-                              _partController.value = _partController.value.copyWith(
-                                text: capped,
-                                selection: TextSelection.collapsed(offset: capped.length),
-                              );
-                            },
-                            validator: (v) => v!.isEmpty ? 'Required' : null,
-                          ),
+                          _buildPartTextField(),
                         ],
                       );
                     },
@@ -1279,24 +1292,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                                     )).toList(),
                                   ),
                                 const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: _partController,
-                                  textCapitalization: TextCapitalization.words,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Type part or tap suggestion above',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  onChanged: (v) => part = v,
-                                  onEditingComplete: () {
-                                    final capped = titleCaseWords(_partController.text);
-                                    part = capped;
-                                    _partController.value = _partController.value.copyWith(
-                                      text: capped,
-                                      selection: TextSelection.collapsed(offset: capped.length),
-                                    );
-                                  },
-                                  validator: (v) => v!.isEmpty ? 'Required' : null,
-                                ),
+                                _buildPartTextField(),
                               ],
                             );
                           },

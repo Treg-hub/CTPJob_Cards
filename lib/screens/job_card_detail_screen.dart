@@ -1760,7 +1760,9 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                       final capped = titleCaseWords(partCtrl.text);
                       setS(() {
                         newPart = capped;
-                        partCtrl.value = partCtrl.value.copyWith(
+                        // Fresh TextEditingValue clears IME composing range
+                        // (copyWith keeps a stale range and asserts).
+                        partCtrl.value = TextEditingValue(
                           text: capped,
                           selection: TextSelection.collapsed(offset: capped.length),
                         );
