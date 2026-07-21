@@ -22,15 +22,41 @@ final syncQueueProvider = StreamProvider<int>((ref) {
   }
 });
 
-class SyncIndicator extends ConsumerWidget {
+/// Global offline-queue banner on Home. Also clears stale "still uploading"
+/// snackbars when the queue drains to zero after a successful background sync.
+class SyncIndicator extends ConsumerStatefulWidget {
   const SyncIndicator({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SyncIndicator> createState() => _SyncIndicatorState();
+}
+
+class _SyncIndicatorState extends ConsumerState<SyncIndicator> {
+  int _prevLength = -1;
+
+  @override
+  Widget build(BuildContext context) {
     final asyncValue = ref.watch(syncQueueProvider);
 
     return asyncValue.when(
       data: (queueLength) {
+        if (_prevLength >= 0 && _prevLength > 0 && queueLength == 0) {
+          // Queue fully drained — drop any lingering offline-save snackbars.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final messenger = ScaffoldMessenger.maybeOf(context);
+            messenger?.hideCurrentSnackBar();
+            messenger?.showSnackBar(
+              const SnackBar(
+                content: Text('All queued changes synced'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          });
+        }
+        _prevLength = queueLength;
+
         if (queueLength == 0) return const SizedBox.shrink();
 
         return Container(

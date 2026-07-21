@@ -20,6 +20,7 @@ import '../utils/presence_gating.dart';
 import 'job_card_detail_screen.dart';
 import 'view_job_cards_screen.dart';
 import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 import '../widgets/job_card_badges.dart';
@@ -317,11 +318,18 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
 
       // Step 2: Create JobCard with the uploaded photo maps (now containing URLs)
       final session = writeAttributionEmployee ?? currentEmployee;
+      final normalizedPart = titleCaseWords(part);
+      part = normalizedPart;
+      _partController.value = _partController.value.copyWith(
+        text: normalizedPart,
+        selection: TextSelection.collapsed(offset: normalizedPart.length),
+      );
+
       final jobCard = JobCard(
         department: selectedDepartment!,
         area: selectedArea!,
         machine: selectedMachine!,
-        part: part,
+        part: normalizedPart,
         type: jobType!,
         priority: priority,
         operator: session?.name ?? operatorName,
@@ -925,11 +933,20 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _partController,
+                            textCapitalization: TextCapitalization.words,
                             decoration: const InputDecoration(
                               labelText: 'Type part or tap suggestion above',
                               border: OutlineInputBorder(),
                             ),
                             onChanged: (v) => part = v,
+                            onEditingComplete: () {
+                              final capped = titleCaseWords(_partController.text);
+                              part = capped;
+                              _partController.value = _partController.value.copyWith(
+                                text: capped,
+                                selection: TextSelection.collapsed(offset: capped.length),
+                              );
+                            },
                             validator: (v) => v!.isEmpty ? 'Required' : null,
                           ),
                         ],
@@ -1264,11 +1281,20 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
                                 const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _partController,
+                                  textCapitalization: TextCapitalization.words,
                                   decoration: const InputDecoration(
                                     labelText: 'Type part or tap suggestion above',
                                     border: OutlineInputBorder(),
                                   ),
                                   onChanged: (v) => part = v,
+                                  onEditingComplete: () {
+                                    final capped = titleCaseWords(_partController.text);
+                                    part = capped;
+                                    _partController.value = _partController.value.copyWith(
+                                      text: capped,
+                                      selection: TextSelection.collapsed(offset: capped.length),
+                                    );
+                                  },
                                   validator: (v) => v!.isEmpty ? 'Required' : null,
                                 ),
                               ],

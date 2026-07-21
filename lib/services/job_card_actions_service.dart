@@ -8,6 +8,7 @@ import '../models/assignment_event.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
 import 'connectivity_service.dart';
+import '../utils/formatters.dart';
 import '../utils/persona_audit.dart';
 
 /// Single implementation of every job-card action, shared by the detail
@@ -262,7 +263,7 @@ class JobCardActionsService {
       'department': department,
       'area': area,
       'machine': machine,
-      'part': part,
+      'part': titleCaseWords(part),
       ..._actorStamp(by),
     });
   }

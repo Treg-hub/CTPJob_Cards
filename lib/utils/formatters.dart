@@ -33,3 +33,18 @@ String formatSADateTime(DateTime dateTime) {
 String formatSALargeNumber(num value) {
   return _saNumberFormat.format(value);
 }
+
+/// Title-case each whitespace-separated word: `pump seal` → `Pump Seal`.
+/// Leaves all-caps tokens (e.g. `IBC`, `SKU`) and empty input unchanged.
+/// Used for free-text part/component fields so floor entries stay readable.
+String titleCaseWords(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed.split(RegExp(r'\s+')).map((word) {
+    if (word.isEmpty) return word;
+    // Preserve pure acronyms / codes (all upper, or digits mixed with upper).
+    if (word == word.toUpperCase() && word.length > 1) return word;
+    if (word.length == 1) return word.toUpperCase();
+    return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+  }).join(' ');
+}

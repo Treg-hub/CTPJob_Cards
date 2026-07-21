@@ -19,6 +19,7 @@ import '../services/notification_service.dart';
 import '../main.dart' show currentEmployee;
 import '../utils/role.dart' show isAdmin, isOperatorRestrictedForJob, roleFromEmployee, UserRole;
 import '../theme/app_theme.dart';
+import '../utils/formatters.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
 
@@ -1478,10 +1479,13 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   void _showStatusChangeDialog(JobCard jobCard) {
     JobStatus selectedStatus = jobCard.status;
+    // Parent messenger — never use dialog context after pop (causes
+    // InheritedElement `_dependents.isEmpty` assertion crashes).
+    final messenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
           title: const Text('Change Job Status'),
           content: Column(
             mainAxisSize: MainAxisSize.min,   // ← Fixed here
@@ -1500,16 +1504,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
             TextButton(
               onPressed: () async {
                 if (selectedStatus == jobCard.status) {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogCtx);
                   return;
                 }
-                if (!guardPersonaSubmit(context)) return;
+                if (!guardPersonaSubmit(dialogCtx)) return;
                 final actor = resolveWriteActor(currentEmployee);
                 if (actor == null) return;
+                Navigator.pop(dialogCtx);
                 try {
                   // Field-scoped update: stamps closedAt on close, clears
                   // stale completion fields on reopen (copyWith can't null
@@ -1522,16 +1527,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                     byClockNo: actor.clockNo,
                   );
                   await _refreshJobCard();
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status changed to ${selectedStatus.displayName}!')));
-                  }
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Status changed to ${selectedStatus.displayName}!')),
+                  );
                 } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error changing status: $e'), backgroundColor: Colors.red),
-                    );
-                  }
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Error changing status: $e'), backgroundColor: Colors.red),
+                  );
                 }
               },
               child: const Text('Change Status'),
@@ -1544,10 +1548,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   void _showChangeTypeDialog(JobCard jobCard) {
     JobType selectedType = jobCard.type;
+    final messenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
           title: const Text('Change Job Type'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1586,17 +1591,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
             TextButton(
               onPressed: selectedType == jobCard.type
                   ? null
                   : () async {
                       final by = currentEmployee;
                       if (by == null || jobCard.id == null) {
-                        Navigator.pop(context);
+                        Navigator.pop(dialogCtx);
                         return;
                       }
                       final from = jobCard.type;
+                      Navigator.pop(dialogCtx);
                       try {
                         await _firestoreService.changeJobCardType(
                           jobCardId: jobCard.id!,
@@ -1605,18 +1611,15 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                           by: by,
                         );
                         await _refreshJobCard();
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Type changed: ${from.displayName} → ${selectedType.displayName}')),
-                          );
-                        }
+                        if (!mounted) return;
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Type changed: ${from.displayName} → ${selectedType.displayName}')),
+                        );
                       } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error changing type: $e'), backgroundColor: Colors.red),
-                          );
-                        }
+                        if (!mounted) return;
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Error changing type: $e'), backgroundColor: Colors.red),
+                        );
                       }
                     },
               child: const Text('Change Type'),
@@ -1637,16 +1640,23 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     String newPart = _currentJobCard.part;
     final partCtrl = TextEditingController(text: newPart);
     List<String> previousParts = [];
+    // Guards async chip loads so setState is never called after dialog close
+    // (that path contributed to `_dependents.isEmpty` red-screen crashes).
+    var dialogOpen = true;
+    final messenger = ScaffoldMessenger.of(context);
 
     if (newDept.isNotEmpty && newArea.isNotEmpty && newMachine.isNotEmpty) {
       previousParts = await _firestoreService.getPreviousParts(newDept, newArea, newMachine);
     }
-    if (!mounted) return;
+    if (!mounted) {
+      partCtrl.dispose();
+      return;
+    }
 
     await showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setS) => AlertDialog(
           title: const Text('Edit Location'),
           content: SingleChildScrollView(
             child: Column(
@@ -1701,14 +1711,18 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                         .map((machine) => ChoiceChip(
                               label: Text(machine),
                               selected: newMachine == machine,
-                              onSelected: (_) async {
+                              onSelected: (_) {
                                 setS(() {
                                   newMachine = machine;
                                   newPart = '';
                                   partCtrl.clear();
                                 });
-                                final parts = await _firestoreService.getPreviousParts(newDept, newArea, machine);
-                                if (ctx.mounted) setS(() => previousParts = parts);
+                                unawaited(() async {
+                                  final parts = await _firestoreService
+                                      .getPreviousParts(newDept, newArea, machine);
+                                  if (!dialogOpen) return;
+                                  setS(() => previousParts = parts);
+                                }());
                               },
                             ))
                         .toList(),
@@ -1735,55 +1749,67 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   const SizedBox(height: 6),
                   TextField(
                     controller: partCtrl,
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Part / Component',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
                     onChanged: (v) => setS(() => newPart = v),
+                    onEditingComplete: () {
+                      final capped = titleCaseWords(partCtrl.text);
+                      setS(() {
+                        newPart = capped;
+                        partCtrl.value = partCtrl.value.copyWith(
+                          text: capped,
+                          selection: TextSelection.collapsed(offset: capped.length),
+                        );
+                      });
+                    },
                   ),
                 ],
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
             FilledButton(
               onPressed: newDept.isNotEmpty &&
                       newArea.isNotEmpty &&
                       newMachine.isNotEmpty &&
                       newPart.trim().isNotEmpty
-                  ? () async {
-                      Navigator.pop(ctx);
+                  ? () {
+                      final cappedPart = titleCaseWords(newPart);
+                      Navigator.pop(dialogCtx);
                       final current = currentEmployee;
                       if (current == null) return;
-                      try {
-                        await _actions.editLocation(
-                          _currentJobCard,
-                          current,
-                          department: newDept,
-                          area: newArea,
-                          machine: newMachine,
-                          part: newPart.trim(),
-                        );
-                        if (mounted) {
+                      unawaited(() async {
+                        try {
+                          await _actions.editLocation(
+                            _currentJobCard,
+                            current,
+                            department: newDept,
+                            area: newArea,
+                            machine: newMachine,
+                            part: cappedPart,
+                          );
+                          if (!mounted) return;
                           setState(() => _currentJobCard = _currentJobCard.copyWith(
                                 department: newDept,
                                 area: newArea,
                                 machine: newMachine,
-                                part: newPart.trim(),
+                                part: cappedPart,
                               ));
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                        } catch (e) {
+                          if (!mounted) return;
+                          messenger.showSnackBar(
                             SnackBar(
                               content: Text('Failed to update location: $e'),
                               backgroundColor: Colors.red,
                             ),
                           );
                         }
-                      }
+                      }());
                     }
                   : null,
               child: const Text('Save'),
@@ -1792,7 +1818,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
         ),
       ),
     );
-    partCtrl.dispose();
+    dialogOpen = false;
+    // Dispose after the route unmounts so TextField is not mid-detach.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      partCtrl.dispose();
+    });
   }
 
   Widget _buildAssignmentButtons(JobCard jobCard) {

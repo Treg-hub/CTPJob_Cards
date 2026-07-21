@@ -373,6 +373,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
               queuedOps: addResult.queuedOps,
             )),
             backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -1268,6 +1269,7 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
               queuedOps: result.queuedOps,
             )),
             backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

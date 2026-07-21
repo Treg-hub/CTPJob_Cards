@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show ValueListenable, debugPrint;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -155,6 +155,11 @@ class SyncService {
       _processQueue();
     }
   }
+
+  /// Live Hive listenable for queue UI (WasteQueuedScreen, home banners).
+  /// Safe only after [init] — callers should catch if box is not open yet.
+  ValueListenable<Box<SyncQueueItem>> get queueListenable =>
+      _queueBox.listenable();
 
   /// One-time healing for queue entries created before media files were
   /// persisted to the app documents dir: any photo/signature entry whose

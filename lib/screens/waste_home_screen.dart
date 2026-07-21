@@ -181,8 +181,11 @@ class _IncomingLoadCard extends StatelessWidget {
                           if (result.queuedOffline) {
                             ScaffoldMessenger.of(ctx).showSnackBar(
                               const SnackBar(
-                                content: Text('Saved offline — will sync when connection returns'),
+                                content: Text(
+                                  'Saved offline — will sync when connection returns (banner updates when done)',
+                                ),
                                 backgroundColor: Colors.orange,
+                                duration: Duration(seconds: 3),
                               ),
                             );
                           }
@@ -533,31 +536,13 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
   Widget _buildLoadsTab(BuildContext context, bool isAdmin, bool isManager) {
     return Column(
       children: [
-        // Offline sync banner
-        if (SyncService().getQueuedWasteOperationCount() > 0)
-          InkWell(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const WasteQueuedScreen()),
-            ),
-            child: Container(
-              color: Colors.orange.shade50,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_upload, color: Colors.orange, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${SyncService().getQueuedWasteOperationCount()} item(s) waiting to sync — tap to view',
-                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, size: 18, color: Colors.orange.shade800),
-                ],
-              ),
-            ),
+        // Offline sync banner — live Hive listenable so it clears when auto-sync drains.
+        _WasteOfflineQueueBanner(
+          onOpenQueue: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const WasteQueuedScreen()),
           ),
+        ),
 
         if (role_utils.canViewCopperReadyPanel(currentEmployee, _wasteSettings))
           WasteCopperReadyPanel(wasteService: _wasteService),
@@ -1101,4 +1086,52 @@ class _OnSiteStockBannerState extends State<_OnSiteStockBanner> {
   }
 }
 
+/// Theme-aware offline queue banner with live Hive updates.
+class _WasteOfflineQueueBanner extends StatelessWidget {
+  const _WasteOfflineQueueBanner({required this.onOpenQueue});
 
+  final VoidCallback onOpenQueue;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bannerBg =
+        isDark ? const Color(0xFF3E2A14) : Colors.orange.shade50;
+    final bannerFg =
+        isDark ? Colors.orange.shade300 : Colors.orange.shade800;
+
+    Widget banner(int count) {
+      if (count <= 0) return const SizedBox.shrink();
+      return InkWell(
+        onTap: onOpenQueue,
+        child: Container(
+          color: bannerBg,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_upload, color: bannerFg, size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '$count item(s) waiting to sync — tap to view',
+                  style: TextStyle(fontSize: 12, color: bannerFg),
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 18, color: bannerFg),
+            ],
+          ),
+        ),
+      );
+    }
+
+    try {
+      return ValueListenableBuilder(
+        valueListenable: SyncService().queueListenable,
+        builder: (context, box, _) =>
+            banner(SyncService().getQueuedWasteOperationCount()),
+      );
+    } catch (_) {
+      return banner(SyncService().getQueuedWasteOperationCount());
+    }
+  }
+}

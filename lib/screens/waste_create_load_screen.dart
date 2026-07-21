@@ -801,6 +801,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
                 loadNumber: loadNumber,
               )),
               backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
             ),
           );
           Navigator.pushReplacement(
@@ -815,6 +816,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
                 loadNumber: loadNumber,
               )),
               backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
             ),
           );
           Navigator.pop(context);
