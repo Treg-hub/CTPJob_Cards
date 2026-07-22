@@ -151,7 +151,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     // it) — mirrors the login path. Without this a fresh registrant reached
     // Home with NO claims: inbox reads denied, and the presence CF rejected
     // the FCM token save below. Non-fatal, has its own 8 s timeout.
-    await AuthClaimsService.refreshClaims();
+    await AuthClaimsService.refreshClaims(force: true);
 
     // Phase 9: session admin flag from claim (AuthClaimsService also updates prefs).
     try {

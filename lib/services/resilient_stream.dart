@@ -137,7 +137,7 @@ Stream<T> resilientSnapshots<T>(
     switch (classifyStreamError(code: code, attempt: attempt)) {
       case StreamRetryAction.refreshClaimsThenRetry:
         // Deduped inside AuthClaimsService — N dead streams, one callable.
-        AuthClaimsService.refreshClaims()
+        AuthClaimsService.refreshClaims(force: true)
             .whenComplete(() => scheduleRetry(retryBackoff(attempt)));
       case StreamRetryAction.retryAfterBackoff:
         scheduleRetry(retryBackoff(attempt));

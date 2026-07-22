@@ -91,6 +91,9 @@ exports.createJobCard = onCall(async (request) => {
  * employees collection can be locked to Admin/CF-only writes. The target doc is
  * the caller's `clockNum` custom claim (set by setCustomClaims) — never a
  * client-supplied id — so a user can only ever write their own record.
+ *
+ * Cost: skips Firestore writes when payload fields already match the doc
+ * (resume telemetry / re-asserted isOnSite no longer stamp presenceUpdatedAt).
  */
 exports.updateEmployeePresence = onCall(async (request) => {
   if (!request.auth) {
@@ -105,57 +108,65 @@ exports.updateEmployeePresence = onCall(async (request) => {
   const ref = db.collection("employees").doc(String(clockNo));
   const now = admin.firestore.FieldValue.serverTimestamp();
 
+  const snap = await ref.get();
+  const prev = snap.exists ? snap.data() : {};
+
   const update = {};
-  if (typeof innerData.fcmToken === "string") {
+  if (typeof innerData.fcmToken === "string" && innerData.fcmToken !== prev.fcmToken) {
     update.fcmToken = innerData.fcmToken;
     update.fcmTokenUpdatedAt = now;
   }
-  if (typeof innerData.clientPlatform === "string") {
+  if (typeof innerData.clientPlatform === "string" &&
+      innerData.clientPlatform !== prev.clientPlatform) {
     update.clientPlatform = innerData.clientPlatform;
     update.clientReportedAt = now;
   }
-  if (typeof innerData.clientDevice === "string") {
+  if (typeof innerData.clientDevice === "string" &&
+      innerData.clientDevice !== prev.clientDevice) {
     update.clientDevice = innerData.clientDevice;
   }
   // App version/build from PackageInfo — Admin On-site uses these to chase soft updates.
   if (typeof innerData.clientAppVersion === "string" && innerData.clientAppVersion.length <= 32) {
-    update.clientAppVersion = innerData.clientAppVersion;
-    update.clientReportedAt = now;
+    if (innerData.clientAppVersion !== prev.clientAppVersion) {
+      update.clientAppVersion = innerData.clientAppVersion;
+      update.clientReportedAt = now;
+    }
   }
+  let buildStr = null;
   if (typeof innerData.clientBuildNumber === "string" && innerData.clientBuildNumber.length <= 16) {
-    update.clientBuildNumber = innerData.clientBuildNumber;
-    update.clientReportedAt = now;
+    buildStr = innerData.clientBuildNumber;
   } else if (typeof innerData.clientBuildNumber === "number" && Number.isFinite(innerData.clientBuildNumber)) {
-    update.clientBuildNumber = String(Math.trunc(innerData.clientBuildNumber));
+    buildStr = String(Math.trunc(innerData.clientBuildNumber));
+  }
+  if (buildStr != null && buildStr !== String(prev.clientBuildNumber ?? "")) {
+    update.clientBuildNumber = buildStr;
     update.clientReportedAt = now;
   }
   if (typeof innerData.notificationDelivery === "string") {
     const mode = innerData.notificationDelivery;
-    if (mode === "push" || mode === "inbox_only") {
+    if ((mode === "push" || mode === "inbox_only") && mode !== prev.notificationDelivery) {
       update.notificationDelivery = mode;
     }
   }
   if (innerData.permissions && typeof innerData.permissions === "object") {
-    const permSnap = await ref.get();
     const existingPerms =
-      permSnap.exists && permSnap.data().permissions
-        ? permSnap.data().permissions
-        : {};
-    update.permissions = { ...existingPerms, ...innerData.permissions };
+      prev.permissions && typeof prev.permissions === "object" ? prev.permissions : {};
+    const merged = { ...existingPerms, ...innerData.permissions };
+    if (JSON.stringify(merged) !== JSON.stringify(existingPerms)) {
+      update.permissions = merged;
+    }
   }
 
-  // Presence: read the current value so on/off-site timestamps are stamped only
-  // on a real transition (keeps lastOnSiteAt a true session start, so the admin
-  // 14h-stuck flag stays meaningful even if a heartbeat re-asserts isOnSite).
+  // Presence: stamp timestamps only on a real on/off transition. Re-asserting
+  // the same isOnSite must NOT write (avoids onEmployeeWritten + roster noise).
   let transition = null; // 'enter' | 'exit' | null
   if (typeof innerData.isOnSite === "boolean") {
-    const snap = await ref.get();
-    const prev = snap.exists ? snap.data().isOnSite : undefined;
-    update.isOnSite = innerData.isOnSite;
-    update.presenceSource = source;
-    update.presenceUpdatedAt = now;
-    if (prev !== innerData.isOnSite) {
+    const prevOnSite = prev.isOnSite;
+    if (prevOnSite !== innerData.isOnSite) {
       transition = innerData.isOnSite ? "enter" : "exit";
+      update.isOnSite = innerData.isOnSite;
+      update.presenceSource = source;
+      update.presenceUpdatedAt = now;
       if (innerData.isOnSite) update.lastOnSiteAt = now;
       else update.lastOffSiteAt = now;
     }
@@ -364,12 +375,14 @@ async function rebuildEmployeeRoster() {
 // employee's entry from the trigger payload.
 // Timestamp/audit fields that change on presence heartbeats but never affect
 // recipient routing — a write touching only these is skipped to avoid roster churn.
+// NOTE: fcmToken + notificationDelivery are NOT noise — escalate/sendNotification
+// reuse roster emp hints; stale tokens would drop pushes.
 const ROSTER_NOISE_FIELDS = new Set([
   "presenceUpdatedAt", "presenceSource", "fcmTokenUpdatedAt",
   "lastOnSiteAt", "lastOffSiteAt", "lastUpdatedAt", "updatedAt", "lastSeenAt",
   // Client telemetry heartbeats (version chase / platform) — not used for escalation routing.
   "clientPlatform", "clientDevice", "clientAppVersion", "clientBuildNumber",
-  "clientReportedAt", "notificationDelivery", "permissions", "fcmToken",
+  "clientReportedAt", "permissions",
 ]);
 
 exports.onEmployeeWritten = functions.firestore.onDocumentWritten(
@@ -971,9 +984,10 @@ async function sendNotification({
   initiatedByName = null,
   feedbackId = null, // feedback-loop deep link (My Feedback thread)
   forceInbox = false, // true = never FCM; always park (admin stale follow-up)
+  empHint = null, // optional cached employee (roster / already-loaded doc) — skip re-get
 }) {
-  let emp = null;
-  if (recipientClockNo) {
+  let emp = empHint || null;
+  if (!emp && recipientClockNo) {
     const empDoc = await db.collection("employees").doc(String(recipientClockNo)).get();
     if (empDoc.exists) {
       emp = { clockNo: recipientClockNo, ...empDoc.data() };
@@ -1104,6 +1118,7 @@ async function notifyCreationRecipients(jobId, job, { triggeredBy = "job_created
     await sendNotification({
       token: emp.token,
       recipientClockNo: emp.clockNo,
+      empHint: emp,
       title,
       body,
       jobCardNumber: job.jobCardNumber || jobId,
@@ -1580,6 +1595,7 @@ exports.escalateNotifications = functions.scheduler.onSchedule({
         await sendNotification({
           token: emp.token,
           recipientClockNo: emp.clockNo,
+          empHint: emp,
           title,
           body,
           jobCardNumber: jobNumber,

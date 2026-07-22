@@ -1017,9 +1017,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   Future<void> _hydrateShellData({
     required String reason,
     bool forceStreams = true,
+    bool forceClaims = false,
   }) async {
     debugPrint('HomeScreen: hydrate ($reason) forceStreams=$forceStreams');
-    unawaited(AuthClaimsService.refreshClaims());
+    unawaited(AuthClaimsService.refreshClaims(force: forceClaims));
     if (forceStreams) {
       RetryTriggers.instance.notifyForceResubscribe();
     } else {
@@ -1063,7 +1064,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (last == build) return;
       debugPrint(
           'HomeScreen: post-update bootstrap build=$build (was ${last ?? 'none'})');
-      await _hydrateShellData(reason: 'post-update', forceStreams: true);
+      await _hydrateShellData(
+          reason: 'post-update', forceStreams: true, forceClaims: true);
       if (!mounted) return;
       await prefs.setString(_bootstrapBuildPrefsKey, build);
     } catch (e) {
@@ -1077,6 +1079,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   /// GPS is started in parallel and must not gate stream/settings recovery
   /// (Geolocator can take up to 30s after update or when walking on-site).
   Future<void> _onAppResumed() async {
+    // Claims: warm TTL inside AuthClaimsService — do not force on every resume.
     unawaited(AuthClaimsService.refreshClaims());
     unawaited(_refreshEmployeeOnResume());
 
@@ -2048,7 +2051,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   const SizedBox(height: 16),
                   TextButton.icon(
                     onPressed: () async {
-                      await AuthClaimsService.refreshClaims();
+                      await AuthClaimsService.refreshClaims(force: true);
                       if (!mounted) return;
                       setState(() {
                         _myWorkStream = null;

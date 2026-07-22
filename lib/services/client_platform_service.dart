@@ -35,12 +35,22 @@ class ClientPlatformReport {
       };
 
   bool get isInboxOnly => notificationDelivery == 'inbox_only';
+
+  String get fingerprint => [
+        clientPlatform,
+        clientDevice,
+        notificationDelivery,
+        clientAppVersion ?? '',
+        clientBuildNumber ?? '',
+      ].join('|');
 }
 
 class ClientPlatformService {
   static final ClientPlatformService _instance = ClientPlatformService._internal();
   factory ClientPlatformService() => _instance;
   ClientPlatformService._internal();
+
+  String? _lastSyncedFingerprint;
 
   Future<ClientPlatformReport> currentReport() async {
     String? version;
@@ -74,9 +84,14 @@ class ClientPlatformService {
 
   /// Best-effort sync so CF can park iPhone web users to notification_inbox
   /// and Admin On-site can show which APK build each employee last opened.
-  Future<void> syncToFirestore() async {
+  /// Skips the CF when the payload matches the last successful sync this session.
+  Future<void> syncToFirestore({bool force = false}) async {
     try {
       final report = await currentReport();
+      if (!force && _lastSyncedFingerprint == report.fingerprint) {
+        debugPrint('Client platform sync skipped (unchanged)');
+        return;
+      }
       await FirestoreService().updateMyPresence(
         clientPlatform: report.clientPlatform,
         clientDevice: report.clientDevice,
@@ -84,6 +99,7 @@ class ClientPlatformService {
         clientAppVersion: report.clientAppVersion,
         clientBuildNumber: report.clientBuildNumber,
       );
+      _lastSyncedFingerprint = report.fingerprint;
       debugPrint(
         'Client platform synced: ${report.clientPlatform}/${report.clientDevice} '
         'v${report.clientAppVersion ?? '?'}+${report.clientBuildNumber ?? '?'} '
