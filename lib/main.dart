@@ -344,7 +344,7 @@ void main() async {
         // Claims (role/department/isAdmin/clockNum) are platform-agnostic and
         // gate Wave B reads/writes, so refresh on web too. Fire-and-forget;
         // never blocks startup.
-        AuthClaimsService.refreshClaims();
+        AuthClaimsService.refreshClaims(force: true);
       }
 
       final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;

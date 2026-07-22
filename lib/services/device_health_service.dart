@@ -92,6 +92,9 @@ class DeviceHealthService {
 
   static const _fullScreenIntentPrefsKey = 'deviceHealth_fullScreenIntent';
 
+  /// Last successful permissions payload fingerprint (session dedupe).
+  String? _lastPermissionsFingerprint;
+
   Future<bool> _fullScreenIntentGranted() async {
     if (kIsWeb || !Platform.isAndroid) return true;
     final prefs = await SharedPreferences.getInstance();
@@ -287,11 +290,22 @@ class DeviceHealthService {
   }
 
   /// Best-effort sync of all permission statuses to employees.permissions.
-  Future<void> syncPermissionsToFirestore() async {
+  /// Skips when the payload matches the last successful sync this session.
+  Future<void> syncPermissionsToFirestore({bool force = false}) async {
     if (kIsWeb) return;
     try {
       final payload = await permissionsPayloadForFirestore();
+      final fingerprint = payload.entries
+          .map((e) => '${e.key}:${(e.value as Map)['granted']}')
+          .toList()
+        ..sort();
+      final key = fingerprint.join('|');
+      if (!force && _lastPermissionsFingerprint == key) {
+        debugPrint('syncPermissionsToFirestore skipped (unchanged)');
+        return;
+      }
       await FirestoreService().updateMyPresence(permissions: payload);
+      _lastPermissionsFingerprint = key;
     } catch (e) {
       debugPrint('syncPermissionsToFirestore failed (non-fatal): $e');
     }

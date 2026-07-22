@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // clockNum, isAdmin from the locked admins/{uid} registry). The presence
       // CF used by the FCM-token save below needs the clockNum claim, and admin
       // config writes need isAdmin. Non-fatal for offline — never blocks login.
-      await AuthClaimsService.refreshClaims();
+      await AuthClaimsService.refreshClaims(force: true);
 
       // Phase 9: prefer token isAdmin for session + prefs (matches rules).
       // Phase 8.4: fail-loud if clockNum missing after successful refresh path.
