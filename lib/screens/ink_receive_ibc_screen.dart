@@ -11,6 +11,7 @@ import '../models/ink_stock_item.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../services/ink_barcode_parser.dart';
+import '../utils/ink_delivery_note_flow.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
@@ -27,8 +28,10 @@ class _IbcRow {
     String kg = '',
     this.charge,
     this.locked = false,
+    DateTime? scannedAt,
   })  : numberCtrl = TextEditingController(text: number),
-        kgCtrl = TextEditingController(text: kg);
+        kgCtrl = TextEditingController(text: kg),
+        scannedAt = scannedAt ?? DateTime.now();
 
   final TextEditingController numberCtrl;
   String? sscc;
@@ -36,6 +39,8 @@ class _IbcRow {
   final TextEditingController kgCtrl;
   String? charge;
   bool locked;
+  /// Wall-clock time when this IBC was scanned or first entered (not the form date).
+  DateTime scannedAt;
 
   bool get hasContent =>
       numberCtrl.text.trim().isNotEmpty ||
@@ -109,6 +114,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
           kg: _kgText(ibc.kg),
           charge: ibc.chargeNumber,
           locked: true,
+          scannedAt: ibc.receivedDate,
         ));
       }
     });
@@ -203,6 +209,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
         kg: kg,
         charge: res.charge,
         locked: lock,
+        scannedAt: DateTime.now(),
       ));
     });
     if (ibcNum != null && ibcNum.length == 8) {
@@ -482,7 +489,10 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       row.kgCtrl.text = _kgText(kg);
       row.charge = charge;
       row.locked = true;
-      if (isNew) _rows.add(row);
+      if (isNew) {
+        row.scannedAt = DateTime.now();
+        _rows.add(row);
+      }
     });
   }
 
@@ -521,7 +531,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
         ibcNumber: numText,
         itemCode: r.itemCode!,
         kg: kg,
-        receivedDate: _effectiveAt,
+        receivedDate: r.scannedAt,
         chargeNumber: r.charge,
       ));
     }
@@ -770,9 +780,15 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
       final stillReceiving = expected > 0 && onShipment < expected;
       final msg = stillReceiving
           ? '${ibcs.length} IBC(s) saved — $onShipment / $expected on shipment (still receiving).'
-          : '${ibcs.length} IBC(s) received — cost pending.';
+          : '${ibcs.length} IBC(s) saved — marked received.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      if (!stillReceiving) Navigator.pop(context);
+      if (stillReceiving) {
+        setState(() => _submitting = false);
+        return;
+      }
+      invalidateInkReceivedPeriodLists(ref);
+      if (!mounted) return;
+      Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -1020,6 +1036,7 @@ class _State extends ConsumerState<InkReceiveIbcScreen> {
                           displayName[row.itemCode] ?? row.itemCode ?? '?',
                           '${nf.format(double.parse(row.kgCtrl.text.trim()))} kg',
                           if (row.charge != null) 'Charge ${row.charge}',
+                          DateFormat('HH:mm:ss').format(row.scannedAt),
                           if (_registerConflicts
                               .contains(row.numberCtrl.text.trim()))
                             'Already registered — remove to continue',

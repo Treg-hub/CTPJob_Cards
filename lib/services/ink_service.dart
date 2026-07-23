@@ -1143,6 +1143,7 @@ class InkService {
             'item_code': ibc.itemCode,
             'kg': ibc.kg,
             'charge_number': ibc.chargeNumber,
+            'scanned_at': ibc.receivedDate.toIso8601String(),
           },
       ],
       'supplier_name': supplierName,

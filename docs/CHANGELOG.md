@@ -6,6 +6,27 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-23 — 2.3.0+186 — Ink delivery note after receive
+
+### What you will notice
+
+- After **Receive Local** or **Receive Ink (IBC)** against an order or shipment, stock saves and the load is marked received so you can keep working.
+- Loads still needing a signed transporter delivery note appear under **Pending delivery note** with a **red** tint — tap to photograph when ready.
+- Once the note is saved, the row moves to grey **Received this period** (complete).
+- Receiving without an order or shipment still skips the delivery-note step.
+
+---
+
+## 2026-07-23 — 2.3.0+185 — Smoother resume and permissions refresh
+
+### What you will notice
+
+- Returning to the app after a break is lighter on the phone — day-to-day screens should feel the same.
+- After you **sign in**, install an update, or tap **Retry**, your role and access still refresh promptly so modules and job lists stay correct.
+- Background connection chatter is reduced, which helps keep live lists steadier when the network is busy.
+
+---
+
 ## 2026-07-21 — 2.3.0+184 — Job card parts, waste queue, smoother updates
 
 ### What you will notice
