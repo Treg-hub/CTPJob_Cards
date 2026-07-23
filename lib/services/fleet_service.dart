@@ -20,6 +20,7 @@ import '../models/fleet_work_comment.dart';
 import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import 'connectivity_service.dart';
+import '../utils/fleet_constants.dart';
 import '../utils/fleet_soft_delete.dart';
 import '../utils/persona_audit.dart';
 import 'sync_service.dart';
@@ -578,10 +579,11 @@ class FleetService {
   }
 
   // ---------------------------------------------------------------------------
-  // PART NAME SUGGESTIONS (collection group across all work records)
+  // PART NAME SUGGESTIONS (common picks + past work parts)
   // ---------------------------------------------------------------------------
 
   Future<List<String>> getSuggestedPartNames() async {
+    var historical = <String>[];
     try {
       final snap = await _db
           .collectionGroup(Collections.fleetWorkParts)
@@ -592,10 +594,11 @@ class FleetService {
         final name = doc.data()['part_name'] as String?;
         if (name != null && name.trim().isNotEmpty) names.add(name.trim());
       }
-      return names.toList()..sort();
+      historical = names.toList();
     } catch (_) {
-      return [];
+      // Offline / permission — still return curated common picks.
     }
+    return mergeFleetPartSuggestions(historical);
   }
 
   Future<List<String>> uploadPhotosForRecord(
@@ -1004,6 +1007,17 @@ class FleetService {
     return _db
         .collection(Collections.fleetDailyChecks)
         .where('check_date', isEqualTo: today)
+        .snapshots()
+        .map((s) => s.docs.map(FleetDailyCheck.fromFirestore).toList());
+  }
+
+  /// Recent pre-use checks (newest first). Callers group by [assetId] for
+  /// "last checklist" — limit keeps reads bounded (small fleet).
+  Stream<List<FleetDailyCheck>> watchRecentDailyChecks({int limit = 80}) {
+    return _db
+        .collection(Collections.fleetDailyChecks)
+        .orderBy('created_at', descending: true)
+        .limit(limit)
         .snapshots()
         .map((s) => s.docs.map(FleetDailyCheck.fromFirestore).toList());
   }

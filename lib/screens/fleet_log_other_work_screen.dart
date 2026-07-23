@@ -57,7 +57,7 @@ class _FleetLogOtherWorkScreenState
   final List<String> _pendingPhotoPaths = [];
   List<String> _linkedIssueIds = [];
   final List<FleetWorkPartRow> _parts = [];
-  List<String> _suggestedPartNames = [];
+  List<String> _suggestedPartNames = List.of(kFleetCommonPartNames);
   DateTime _workCarriedOut = DateTime.now();
   bool _saving = false;
 

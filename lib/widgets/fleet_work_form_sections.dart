@@ -118,7 +118,7 @@ class FleetWorkPartsSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Quick add:',
+                  'Quick picks:',
                   style: TextStyle(
                     fontSize: 11,
                     color: Theme.of(context).appColors.textMuted,
@@ -129,7 +129,7 @@ class FleetWorkPartsSection extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 4,
                   children: availableChips
-                      .take(8)
+                      .take(kFleetCommonPartNames.length)
                       .map((name) => ActionChip(
                             label: Text(name,
                                 style: const TextStyle(fontSize: 11)),
@@ -275,7 +275,7 @@ class _FleetPartNameFieldState extends State<_FleetPartNameField> {
                 .toList(),
           ),
           Text(
-            'Suggestions from past jobs',
+            'Common Hyster parts & past jobs',
             style: TextStyle(fontSize: 10, color: muted),
           ),
         ],

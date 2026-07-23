@@ -32,7 +32,7 @@ class PresenceGating {
   }) =>
       isOnSite || bypassesOffSiteRestrictions(emp);
 
-  /// Bottom-nav Fleet tab visibility.
+  /// Fleet module visibility (Home tile + auto-push for Hyster Mechanic).
   static bool showFleetTab({
     required Employee? emp,
     required FleetSettings? settings,

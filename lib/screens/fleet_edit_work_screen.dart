@@ -12,6 +12,7 @@ import '../models/fleet_work_part.dart';
 import '../models/fleet_work_record.dart';
 import '../providers/fleet_provider.dart';
 import '../services/fleet_service.dart';
+import '../utils/fleet_constants.dart';
 import '../theme/app_theme.dart';
 import '../utils/fleet_work_photo_utils.dart';
 import '../utils/role.dart' as role_utils;
@@ -46,7 +47,7 @@ class _FleetEditWorkScreenState extends ConsumerState<FleetEditWorkScreen> {
   final List<String> _pendingPhotoPaths = [];
   List<String> _linkedIssueIds = [];
   final List<FleetWorkPartRow> _parts = [];
-  List<String> _suggestedPartNames = [];
+  List<String> _suggestedPartNames = List.of(kFleetCommonPartNames);
   DateTime _workCarriedOut = DateTime.now();
   DateTime? _loadedEndDate;
   bool _saving = false;

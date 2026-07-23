@@ -82,7 +82,7 @@ import '../utils/list_load_state.dart';
 import '../utils/presence_gating.dart';
 import '../utils/screen_insets.dart';
 
-enum _ShellTab { home, myWork, copper, waste, fleet, security }
+enum _ShellTab { home, myWork, copper, waste, security }
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -248,25 +248,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return idx >= 0 && _selectedIndex == idx;
   }
 
-  int _fleetTabIndex() {
-    if (!_isFleetUser) return -1;
-    var idx = _indexAfterCoreTabs();
-    if (_wasteTabIndex() >= 0) idx++;
-    return idx;
-  }
-
   int _securityTabIndex() {
     if (!_showSecurityModule) return -1;
     var idx = _indexAfterCoreTabs();
     if (_wasteTabIndex() >= 0) idx++;
-    if (_fleetTabIndex() >= 0) idx++;
     return idx;
-  }
-
-  /// Returns true when the currently visible tab is the Fleet tab.
-  bool get _isOnFleetTab {
-    final idx = _fleetTabIndex();
-    return idx >= 0 && _selectedIndex == idx;
   }
 
   /// Returns true when the currently visible tab is the Security tab.
@@ -275,25 +261,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return idx >= 0 && _selectedIndex == idx;
   }
 
-  void _maybeOpenFleetTabForMechanic() {
+  void _openFleetModule() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FleetHomeScreen()),
+    );
+  }
+
+  /// Hyster Mechanic position auto-opens Fleet as a pushed screen (not a shell tab).
+  /// Uses position title only — not [isFleetMechanic] claim (admins keep Home).
+  void _maybeOpenFleetForMechanic() {
     if (_fleetMechanicNavDone || !mounted || _pendingJobId != null) return;
     final settings = _cachedFleetSettings;
     if (settings == null || !settings.fleetEnabled) return;
     final emp = currentEmployee;
     if (emp == null) return;
 
-    // Position title only — not isFleetMechanic. Admins get that claim for
-    // RBAC via setCustomClaims and must not be auto-sent to Fleet on load/resume.
     if (role_utils.isHysterMechanicByPosition(emp)) {
-      final idx = _fleetTabIndex();
-      if (idx < 0) return;
+      // Wait until allowlist/claim grants module access (tile/push target ready).
+      if (!_isFleetUser) return;
       _fleetMechanicNavDone = true;
-      _setShellTab(idx);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openFleetModule();
+      });
       return;
     }
 
     // Non-Hyster users: settle once we know their title so a later admin
-    // isFleetMechanic claim cannot jump the shell to Fleet mid-session.
+    // isFleetMechanic claim cannot jump into Fleet mid-session.
     if (emp.position.trim().isNotEmpty) {
       _fleetMechanicNavDone = true;
     }
@@ -316,24 +311,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       return;
     }
 
-    // Dual-role users see the mechanic shell on the Fleet tab — open Machines in a
-    // standalone reporter screen so daily-check / machine pickers stay consistent.
-    if (role_utils.isFleetReporter(emp, settings) &&
-        role_utils.isFleetMechanic(emp, settings)) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const FleetReporterHomeScreen(
-            initialTab: 0,
-            standalone: true,
-          ),
-        ),
-      );
-      return;
-    }
-
     ref.read(fleetReporterShellTabProvider.notifier).state = 0;
-    final idx = _fleetTabIndex();
-    if (idx >= 0) _setShellTab(idx);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const FleetReporterHomeScreen(
+          initialTab: 0,
+          standalone: true,
+        ),
+      ),
+    );
   }
 
   void _maybeOpenModuleTabForSecurityGuard() {
@@ -357,7 +343,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   String get _appBarTitle {
     if (_isOnCopperTab) return 'Copper';
     if (_isOnWasteTab) return 'Waste Recovery';
-    if (_isOnFleetTab) return 'Fleet Maintenance';
     if (_isOnSecurityTab) return 'Site Security';
     if (_isSiteSecurityGuardOnly && _selectedIndex == 0) {
       return 'Waste & Security';
@@ -390,7 +375,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ref.invalidate(currentEmployeeProvider);
       // Re-evaluate floor auto-nav once position is known (settings may have
       // loaded earlier with a stub employee).
-      _maybeOpenFleetTabForMechanic();
+      _maybeOpenFleetForMechanic();
       // React only to a genuine change, and debounce snackbars: GPS jitter at
       // the fence boundary flips isOnSite back and forth. Data hydrate runs
       // immediately on became-on-site so Recent Jobs / modules don't stay on
@@ -557,7 +542,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _ShellTab.myWork => _showMyWorkNav,
         _ShellTab.copper => _isCopperAuthorized,
         _ShellTab.waste => _showWasteModule,
-        _ShellTab.fleet => _isFleetUser,
         _ShellTab.security => _showSecurityModule,
       };
 
@@ -575,9 +559,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
     if (_showWasteModule) {
       if (index == i++) return _ShellTab.waste;
-    }
-    if (_isFleetUser) {
-      if (index == i++) return _ShellTab.fleet;
     }
     if (_showSecurityModule) {
       if (index == i++) return _ShellTab.security;
@@ -675,12 +656,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (!_canCreateJobCard) {
       createAction['disabledReason'] = PresenceGating.offSiteCreateJobMessage;
     }
+    if (_isFleetUser) {
+      result = [
+        ...result,
+        {
+          'title': 'Fleet',
+          'icon': Icons.forklift,
+          'color': _fleetGroup,
+          'onTap': _openFleetModule,
+        },
+      ];
+    }
     if (_canReportFleetIssue) {
       result = [
         ...result,
         {
           'title': FleetLabels.reportProblem,
-          'icon': Icons.forklift,
+          'icon': Icons.report_problem_outlined,
           'color': _fleetGroup,
           'onTap': () => openFleetReportWizard(context, forceStep1: true),
         },
@@ -860,7 +852,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           _fleetChecklistEnabled = checklist.enabled;
         });
         _fleetSettingsLoaded = true;
-        _maybeOpenFleetTabForMechanic();
+        _maybeOpenFleetForMechanic();
       }
     } catch (e) {
       debugPrint('Fleet settings load error: $e');
@@ -932,7 +924,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     });
     _resetTabIfHiddenModule();
     ref.invalidate(currentEmployeeProvider);
-    _maybeOpenFleetTabForMechanic();
+    _maybeOpenFleetForMechanic();
     _maybeRecheckUpdateForCohort();
   }
 
@@ -1544,7 +1536,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           _screenPadding,
           _screenPadding +
               ScreenInsets.scrollBottomInHomeShell(
-                clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
+                clearFab: !(_isOnWasteTab || _isOnSecurityTab),
               ),
         ),
         child: _buildSecurityGuardHomeHub(),
@@ -1558,7 +1550,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _screenPadding,
         _screenPadding +
             ScreenInsets.scrollBottomInHomeShell(
-              clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
+              clearFab: !(_isOnWasteTab || _isOnSecurityTab),
             ),
       ),
       child: Column(
@@ -2360,7 +2352,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   padding: ScreenInsets.listPadding(
                     context,
                     inHomeShell: true,
-                    clearFab: !(_isOnWasteTab || _isOnFleetTab || _isOnSecurityTab),
+                    clearFab: !(_isOnWasteTab || _isOnSecurityTab),
                   ),
                   itemCount: jobs.length,
                   itemBuilder: (context, index) {
@@ -2601,13 +2593,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return const WasteHomeScreen();
   }
 
-  // ---------------------------------------------------------------------------
-  // FLEET MAINTENANCE tab
-  // ---------------------------------------------------------------------------
-  Widget _buildFleetTab() {
-    return const FleetHomeScreen();
-  }
-
   Widget _buildSecurityTab() {
     return const SecurityHomeScreen();
   }
@@ -2628,7 +2613,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       next.whenData((settings) {
         if (mounted && _cachedFleetSettings != settings) {
           setState(() => _cachedFleetSettings = settings);
-          _maybeOpenFleetTabForMechanic();
+          _maybeOpenFleetForMechanic();
           _loadFleetSettings();
         }
       });
@@ -2676,8 +2661,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         const BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Copper'),
       if (_showWasteModule)
         const BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Waste'),
-      if (_isFleetUser)
-        const BottomNavigationBarItem(icon: Icon(Icons.forklift), label: 'Fleet'),
       if (_showSecurityModule)
         const BottomNavigationBarItem(icon: Icon(Icons.shield_outlined), label: 'Security'),
     ];
@@ -2689,7 +2672,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       if (_showMyWorkNav) () => _buildMyWorkTab(),
       if (_isCopperAuthorized) () => _buildCopperTab(),
       if (_showWasteModule) () => _buildWasteTab(),
-      if (_isFleetUser) () => _buildFleetTab(),
       if (_showSecurityModule) () => _buildSecurityTab(),
     ];
 
@@ -2782,7 +2764,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ),
       floatingActionButton: (_isOnCopperTab ||
               _isOnWasteTab ||
-              _isOnFleetTab ||
               _isOnSecurityTab)
           ? null
           : FloatingActionButton(

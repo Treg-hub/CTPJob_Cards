@@ -9,6 +9,7 @@ import '../models/fleet_issue.dart';
 import '../models/fleet_type.dart';
 import '../models/fleet_work_part.dart';
 import '../services/fleet_service.dart';
+import '../utils/fleet_constants.dart';
 import '../theme/app_theme.dart';
 import '../utils/fleet_work_photo_utils.dart';
 import '../widgets/fleet_app_bar.dart';
@@ -48,7 +49,7 @@ class _FleetMarkFixedScreenState extends ConsumerState<FleetMarkFixedScreen> {
   final List<String> _pendingPhotoPaths = [];
   List<String> _linkedIssueIds = [];
   final List<FleetWorkPartRow> _parts = [];
-  List<String> _suggestedPartNames = [];
+  List<String> _suggestedPartNames = List.of(kFleetCommonPartNames);
   DateTime _workCarriedOut = DateTime.now();
   bool _saving = false;
   bool _savingProgress = false;

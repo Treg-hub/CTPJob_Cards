@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../models/fleet_asset.dart';
 import '../models/fleet_type.dart';
-import '../main.dart' show currentEmployee;
 import '../models/fleet_work_record.dart';
 import '../services/fleet_service.dart';
 import '../theme/app_theme.dart';
@@ -114,11 +113,11 @@ class _FleetWorkRecordsListScreenState
         ),
         Expanded(
           child: StreamBuilder<List<FleetWorkRecord>>(
+            // Shared shop history — all mechanics see every fix (logged-by
+            // stays on the tile for attribution). mechanicMode only gates
+            // edit affordances on the detail screen.
             stream: _service.watchWorkRecords(
               assetId: _assetFilterId,
-              loggedByClockNo: widget.mechanicMode
-                  ? currentEmployee?.clockNo
-                  : null,
               limit: 100,
             ),
             builder: (context, snapshot) {
@@ -145,7 +144,7 @@ class _FleetWorkRecordsListScreenState
                   context,
                   horizontal: 12,
                   top: 12,
-                  inHomeShell: widget.embedded,
+                  inHomeShell: false,
                 ),
                 itemCount: records.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 6),
@@ -216,6 +215,13 @@ class WorkRecordTile extends StatelessWidget {
               '${record.assetName}  •  ${record.workTypeName}',
               style: TextStyle(color: colors?.textMuted, fontSize: 12),
             ),
+            if (record.loggedByName.trim().isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Fixed by ${record.loggedByName}',
+                style: TextStyle(color: colors?.textMuted, fontSize: 11),
+              ),
+            ],
             const SizedBox(height: 2),
             Row(
               children: [
