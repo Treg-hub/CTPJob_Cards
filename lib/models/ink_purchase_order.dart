@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'ink_delivery_note.dart';
+
 /// Open PO statuses that still have inbound qty (mirrors Pulse inboundPipeline).
 enum InkPurchaseOrderStatus {
   sent('sent'),
@@ -82,6 +84,7 @@ class InkPurchaseOrder {
     this.erpOrderNumber,
     this.pastelRfoNumber,
     this.estimatedArrival,
+    this.deliveryNote,
     this.updatedAt,
     this.finalizedAt,
   });
@@ -96,6 +99,7 @@ class InkPurchaseOrder {
   final String? erpOrderNumber;
   final String? pastelRfoNumber;
   final DateTime? estimatedArrival;
+  final InkDeliveryNote? deliveryNote;
   final DateTime? updatedAt;
   final DateTime? finalizedAt;
 
@@ -105,6 +109,12 @@ class InkPurchaseOrder {
       remainingKgByItem.values.fold<double>(0, (a, b) => a + b);
 
   bool get hasOpenRemaining => totalRemaining > 1e-6;
+
+  bool get hasDeliveryNote => deliveryNote != null;
+
+  /// Fulfilled local order still waiting for transporter DN photo.
+  bool get needsDeliveryNote =>
+      status == InkPurchaseOrderStatus.fulfilled && deliveryNote == null;
 
   /// When the PO became fulfilled (finalize write-off) or last receipt update.
   DateTime? get receivedAtForPeriod => finalizedAt ?? updatedAt;
@@ -185,6 +195,7 @@ class InkPurchaseOrder {
       erpOrderNumber: d['erp_order_number'] as String?,
       pastelRfoNumber: d['pastel_rfo_number'] as String?,
       estimatedArrival: eta,
+      deliveryNote: InkDeliveryNote.fromMap(d['delivery_note']),
       updatedAt: asDate(d['updated_at']),
       finalizedAt: asDate(d['finalized_at']),
     );

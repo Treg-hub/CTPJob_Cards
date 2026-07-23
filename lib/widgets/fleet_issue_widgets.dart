@@ -249,75 +249,101 @@ class FleetIssueTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>();
+    final hint = subtitleOverride ??
+        (mechanicMode && issue.status.isOpen
+            ? mechanicIssueActionHint(issue.status)
+            : null);
+    final age = hint == null ? _formatAge(issue.createdAt) : null;
+
     return Card(
       color: colors?.cardSurface,
       clipBehavior: Clip.antiAlias,
-      child: Container(
-        // Severity strip — scannable from a distance, unlike text badges.
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: fleetSeverityColor(issue.severity),
-              width: 4,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          // Severity strip — scannable from a distance, unlike text badges.
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: fleetSeverityColor(issue.severity),
+                width: 4,
+              ),
             ),
           ),
-        ),
-        child: ListTile(
-        onTap: onTap,
-        leading: FleetSeverityDot(severity: issue.severity),
-        title: Text(
-          issue.assetName,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              issue.description.length > 80
-                  ? '${issue.description.substring(0, 80)}…'
-                  : issue.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colors?.textMuted, fontSize: 12),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                if (mechanicMode)
-                  FleetMechanicStatusBadge(status: issue.status)
-                else
-                  FleetStatusBadge(status: issue.status),
-                const SizedBox(width: 8),
-                FleetSeverityBadge(severity: issue.severity),
-                const Spacer(),
-                if (subtitleOverride != null)
-                  Text(
-                    subtitleOverride!,
-                    style: TextStyle(
-                      color: kBrandOrange,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: FleetSeverityDot(severity: issue.severity),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      issue.assetName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  )
-                else if (mechanicMode && issue.status.isOpen)
-                  Text(
-                    mechanicIssueActionHint(issue.status),
-                    style: TextStyle(
-                      color: kBrandOrange,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 2),
+                    Text(
+                      issue.description.length > 80
+                          ? '${issue.description.substring(0, 80)}…'
+                          : issue.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors?.textMuted, fontSize: 12),
                     ),
-                  )
-                else
-                  Text(
-                    _formatAge(issue.createdAt),
-                    style: TextStyle(color: colors?.textMuted, fontSize: 11),
-                  ),
-              ],
-            ),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        if (mechanicMode)
+                          FleetMechanicStatusBadge(status: issue.status)
+                        else
+                          FleetStatusBadge(status: issue.status),
+                        const SizedBox(width: 8),
+                        FleetSeverityBadge(severity: issue.severity),
+                        if (hint != null) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              hint,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                              style: TextStyle(
+                                color: kBrandOrange,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ] else if (age != null && age.isNotEmpty) ...[
+                          const Spacer(),
+                          Text(
+                            age,
+                            style: TextStyle(
+                              color: colors?.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
         ),
       ),
     );

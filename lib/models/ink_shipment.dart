@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'ink_delivery_note.dart';
+
 /// Lifecycle of an import shipment (mirrors `ink_shipments.status` in Pulse).
 enum InkShipmentStatus {
   awaitingReceipt('awaiting_receipt'),
@@ -103,6 +105,7 @@ class InkShipment {
     this.lines = const [],
     this.expectedUnits = const [],
     this.receivedUnits = const [],
+    this.deliveryNote,
     this.updatedAt,
   });
 
@@ -117,6 +120,7 @@ class InkShipment {
   final List<InkShipmentLine> lines;
   final List<InkExpectedUnit> expectedUnits;
   final List<InkReceivedUnit> receivedUnits;
+  final InkDeliveryNote? deliveryNote;
   final DateTime? updatedAt;
 
   bool get isIbc => packagingMode == 'ibc';
@@ -127,6 +131,16 @@ class InkShipment {
 
   bool get isReceiptComplete =>
       expectedIbcCount == 0 || receivedIbcCount >= expectedIbcCount;
+
+  /// Stock receive done for floor POD — DN photo still needed.
+  bool get needsDeliveryNote =>
+      isReceiptComplete &&
+      deliveryNote == null &&
+      (status == InkShipmentStatus.received ||
+          status == InkShipmentStatus.awaitingGrn ||
+          status == InkShipmentStatus.costed);
+
+  bool get hasDeliveryNote => deliveryNote != null;
 
   /// Distinct item codes expected on this shipment (for the colour dropdown).
   List<String> get itemCodes =>
@@ -160,6 +174,7 @@ class InkShipment {
       lines: maps('lines').map(InkShipmentLine.fromMap).toList(),
       expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
       receivedUnits: maps('received_units').map(InkReceivedUnit.fromMap).toList(),
+      deliveryNote: InkDeliveryNote.fromMap(d['delivery_note']),
       updatedAt: updatedRaw is Timestamp ? updatedRaw.toDate() : null,
     );
   }

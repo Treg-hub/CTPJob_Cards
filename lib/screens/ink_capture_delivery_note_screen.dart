@@ -8,6 +8,7 @@ import '../models/ink_purchase_order.dart';
 import '../models/ink_shipment.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_delivery_note_flow.dart';
 import '../utils/persona_audit.dart';
 import '../utils/screen_insets.dart';
 
@@ -99,8 +100,9 @@ class _InkCaptureDeliveryNoteScreenState
             capturedBy: emp?.clockNo ?? emp?.name ?? 'mobile',
           );
       if (!mounted) return;
+      invalidateInkReceivedPeriodLists(ref);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delivery note saved')),
+        const SnackBar(content: Text('Delivery note saved — load complete')),
       );
       Navigator.pop(context, true);
     } catch (e) {

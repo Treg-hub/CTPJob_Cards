@@ -9,6 +9,7 @@ import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
+import '../utils/ink_delivery_note_flow.dart';
 import '../utils/ink_period_guard.dart';
 import '../utils/persona_audit.dart';
 import '../utils/ink_pickers.dart';
@@ -155,17 +156,21 @@ class _InkReceiveRawMaterialScreenState
                   'Re-open the order to finish remaining lines.',
         ),
       ));
-      if (recorded > 0) Navigator.pop(context);
+      if (recorded > 0) {
+        invalidateInkReceivedPeriodLists(ref);
+        Navigator.pop(context);
+      }
       return;
     }
     final n = lines.length;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(
         n == 1
-            ? 'Receipt recorded — cost pending manager entry.'
-            : '$n line receipts recorded — cost pending manager entry.',
+            ? 'Receipt saved — marked received.'
+            : '$n line receipts saved — marked received.',
       ),
     ));
+    invalidateInkReceivedPeriodLists(ref);
     Navigator.pop(context);
   }
 
