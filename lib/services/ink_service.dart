@@ -22,9 +22,12 @@ import '../utils/ink_po_fulfillment.dart';
 import '../models/ink_settings.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
+import '../models/ink_tank_level.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
+import '../utils/ink_tank_delta.dart';
 import '../utils/persona_audit.dart';
+import '../constants/ink_toloul.dart';
 import 'connectivity_service.dart';
 import 'resilient_stream.dart';
 import 'waste_stock_crosslink.dart';
@@ -188,15 +191,37 @@ class InkService {
         txn.idempotencyKey.isNotEmpty ? txn.idempotencyKey : _uuid.v4();
     final ref = _db.collection(Collections.inkTransactions).doc(key);
     final data = {...txn.toFirestore(), ...personaAuditFields()};
+    final tankDelta = tankBalanceDeltaForTxn(
+      type: txn.type,
+      itemCode: txn.stockItemCode,
+      quantityDelta: txn.quantityDelta,
+    );
 
     if (txn.idempotencyKey.isNotEmpty) {
       await _db.runTransaction((txnObj) async {
         final snap = await txnObj.get(ref);
         if (snap.exists) return; // already recorded — idempotent skip
         txnObj.set(ref, data);
+        if (tankDelta != null) {
+          _applyTankDeltaInTxn(
+            txnObj,
+            itemCode: txn.stockItemCode,
+            delta: tankDelta,
+            actorClockNo: txn.actorClockNo,
+            actorName: txn.actorName,
+          );
+        }
       });
     } else {
       await ref.set(data);
+      if (tankDelta != null) {
+        await applyTankDelta(
+          itemCode: txn.stockItemCode,
+          delta: tankDelta,
+          actorClockNo: txn.actorClockNo,
+          actorName: txn.actorName,
+        );
+      }
     }
   }
 
@@ -268,6 +293,162 @@ class InkService {
           {'toloul_factory_low_litres': litres},
           SetOptions(merge: true),
         );
+  }
+
+  // ---------------------------------------------------------------------------
+  // TANK LEVELS (ops — ink_tank_levels; not ledger WAC)
+  // ---------------------------------------------------------------------------
+
+  DocumentReference<Map<String, dynamic>> _tankRef(String itemCode) =>
+      _db.collection(Collections.inkTankLevels).doc(itemCode);
+
+  Stream<List<InkTankLevel>> watchTankLevels() => resilientSnapshots(
+        () => _db.collection(Collections.inkTankLevels).snapshots(),
+        debugName: 'ink_tank_levels',
+      ).map((s) {
+        final byCode = <String, InkTankLevel>{};
+        for (final doc in s.docs) {
+          if (!isInkTankItem(doc.id)) continue;
+          try {
+            byCode[doc.id] = InkTankLevel.fromFirestore(doc);
+          } catch (e) {
+            debugPrint('Skipping unparseable ink_tank_levels/${doc.id}: $e');
+          }
+        }
+        return [
+          for (final code in kInkTankItemCodes)
+            byCode[code] ??
+                InkTankLevel(
+                  itemCode: code,
+                  balance: 0,
+                  capacity: kDefaultTankCapacities[code] ?? 0,
+                  lowThreshold: kDefaultTankLowThresholds[code] ?? 0,
+                  unit: kTankUnits[code] ?? 'KG',
+                ),
+        ];
+      });
+
+  /// Absolute dip: set [balance] for each entry (does not change capacity/low).
+  Future<void> submitTankDips({
+    required Map<String, double> balancesByItem,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    _guardWrite();
+    final now = FieldValue.serverTimestamp();
+    for (final e in balancesByItem.entries) {
+      if (!isInkTankItem(e.key)) continue;
+      final ref = _tankRef(e.key);
+      await _db.runTransaction((txn) async {
+        final snap = await txn.get(ref);
+        final data = <String, dynamic>{
+          'balance': e.value,
+          'unit': kTankUnits[e.key] ?? 'KG',
+          'updated_at': now,
+          'updated_by_clock_no': actorClockNo,
+          'updated_by_name': actorName,
+          'last_dip_at': now,
+          'last_dip_by_clock_no': actorClockNo,
+          'last_dip_by_name': actorName,
+        };
+        if (!snap.exists) {
+          data.addAll(InkTankLevel.seedFields(e.key));
+          data['balance'] = e.value;
+        }
+        txn.set(ref, data, SetOptions(merge: true));
+      });
+    }
+  }
+
+  /// Persist capacity and/or low threshold for a tank (settings).
+  Future<void> updateTankSettings({
+    required String itemCode,
+    double? capacity,
+    double? lowThreshold,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    _guardWrite();
+    if (!isInkTankItem(itemCode)) return;
+    if (capacity == null && lowThreshold == null) return;
+    final ref = _tankRef(itemCode);
+    await _db.runTransaction((txn) async {
+      final snap = await txn.get(ref);
+      final data = <String, dynamic>{
+        'updated_at': FieldValue.serverTimestamp(),
+        'updated_by_clock_no': actorClockNo,
+        'updated_by_name': actorName,
+        'unit': kTankUnits[itemCode] ?? 'KG',
+      };
+      if (capacity != null) data['capacity'] = capacity;
+      if (lowThreshold != null) data['low_threshold'] = lowThreshold;
+      if (!snap.exists) {
+        data.addAll(InkTankLevel.seedFields(itemCode));
+        if (capacity != null) data['capacity'] = capacity;
+        if (lowThreshold != null) data['low_threshold'] = lowThreshold;
+      }
+      txn.set(ref, data, SetOptions(merge: true));
+    });
+  }
+
+  void _applyTankDeltaToBatch(
+    WriteBatch batch, {
+    required String itemCode,
+    required double delta,
+    required String actorClockNo,
+    required String actorName,
+  }) {
+    if (!isInkTankItem(itemCode) || delta == 0) return;
+    batch.set(
+      _tankRef(itemCode),
+      {
+        'balance': FieldValue.increment(delta),
+        'unit': kTankUnits[itemCode] ?? 'KG',
+        'updated_at': FieldValue.serverTimestamp(),
+        'updated_by_clock_no': actorClockNo,
+        'updated_by_name': actorName,
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  void _applyTankDeltaInTxn(
+    Transaction txn, {
+    required String itemCode,
+    required double delta,
+    required String actorClockNo,
+    required String actorName,
+  }) {
+    if (!isInkTankItem(itemCode) || delta == 0) return;
+    txn.set(
+      _tankRef(itemCode),
+      {
+        'balance': FieldValue.increment(delta),
+        'unit': kTankUnits[itemCode] ?? 'KG',
+        'updated_at': FieldValue.serverTimestamp(),
+        'updated_by_clock_no': actorClockNo,
+        'updated_by_name': actorName,
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> applyTankDelta({
+    required String itemCode,
+    required double delta,
+    required String actorClockNo,
+    required String actorName,
+  }) async {
+    if (!isInkTankItem(itemCode) || delta == 0) return;
+    final batch = _db.batch();
+    _applyTankDeltaToBatch(
+      batch,
+      itemCode: itemCode,
+      delta: delta,
+      actorClockNo: actorClockNo,
+      actorName: actorName,
+    );
+    await batch.commit();
   }
 
   Future<void> recordMonthEndCount({
@@ -342,15 +523,39 @@ class InkService {
   /// Corrects [original] using the reversing-entry model: the original is marked
   /// `voided` (preserved for audit, excluded from replay) and the [correction]
   /// transaction is appended. The server re-replays and recomputes balance/WAC.
+  /// Also reverses then re-applies ops [ink_tank_levels] for tank-affecting types.
   Future<void> correctTransaction({
     required InkTransaction original,
     required InkTransaction correction,
   }) async {
     if (original.id == null) return;
-    await _db.collection(Collections.inkTransactions).doc(original.id).set({
-      'voided': true,
-      'related_transaction_id': correction.idempotencyKey,
-    }, SetOptions(merge: true));
+    _guardWrite();
+    final batch = _db.batch();
+    batch.set(
+      _db.collection(Collections.inkTransactions).doc(original.id),
+      {
+        'voided': true,
+        'related_transaction_id': correction.idempotencyKey,
+      },
+      SetOptions(merge: true),
+    );
+    if (!original.voided) {
+      final reverse = tankBalanceDeltaForTxn(
+        type: original.type,
+        itemCode: original.stockItemCode,
+        quantityDelta: original.quantityDelta,
+      );
+      if (reverse != null) {
+        _applyTankDeltaToBatch(
+          batch,
+          itemCode: original.stockItemCode,
+          delta: -reverse,
+          actorClockNo: correction.actorClockNo,
+          actorName: correction.actorName,
+        );
+      }
+    }
+    await batch.commit();
     await recordTransaction(correction);
   }
 
@@ -786,7 +991,28 @@ class InkService {
       'voided_at': FieldValue.serverTimestamp(),
     };
     for (final d in txnsSnap.docs) {
+      final data = d.data();
+      final alreadyVoided = data['voided'] == true;
       batch.set(d.reference, voidMeta, SetOptions(merge: true));
+      if (!alreadyVoided) {
+        final type = InkTxnType.fromValue(data['type'] as String?);
+        final itemCode = data['stock_item_code'] as String? ?? '';
+        final qty = (data['quantity_delta'] as num?)?.toDouble() ?? 0;
+        final tankDelta = tankBalanceDeltaForTxn(
+          type: type,
+          itemCode: itemCode,
+          quantityDelta: qty,
+        );
+        if (tankDelta != null) {
+          _applyTankDeltaToBatch(
+            batch,
+            itemCode: itemCode,
+            delta: -tankDelta,
+            actorClockNo: actorClockNo,
+            actorName: actorName,
+          );
+        }
+      }
     }
     batch.set(
       _db.collection(Collections.inkProductionRuns).doc(runId),
@@ -1477,6 +1703,26 @@ class InkService {
             notes: zeroWash ? 'Zero wash confirmed at consume' : null,
           ).toFirestore(),
         );
+        if (washLitres > 0) {
+          _applyTankDeltaInTxn(
+            txn,
+            itemCode: tolulItemCode,
+            delta: -washLitres,
+            actorClockNo: actorClockNo,
+            actorName: actorName,
+          );
+        }
+      }
+
+      // Colour tank top-up (ink kg already in ledger at receipt).
+      if (isInkTankItem(ibc.itemCode) && ibc.kg != 0) {
+        _applyTankDeltaInTxn(
+          txn,
+          itemCode: ibc.itemCode,
+          delta: ibc.kg,
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+        );
       }
     });
   }
@@ -1496,23 +1742,43 @@ class InkService {
     await WasteStockCrosslink.assertIbcStockVoidable(_db, ibc.ibcNumber);
 
     final ibcRef = await _resolveInkIbcRef(ibc);
+    final ibcSnap = await ibcRef.get();
+    final wasTransferred = InkIbcStatus.fromValue(
+          ibcSnap.data()?['status'] as String?,
+        ) ==
+        InkIbcStatus.transferred;
     final washRef =
         _db.collection(Collections.inkTransactions).doc('ibcwash_${ibc.ibcNumber}');
     final washSnap = await washRef.get();
     final batch = _db.batch();
     final now = Timestamp.now();
+    double washLitres = 0;
     if (washSnap.exists) {
-      batch.set(
-        washRef,
-        {
-          'voided': true,
-          'void_reason': reason,
-          'voided_by_clock_no': actorClockNo,
-          'voided_by_name': actorName,
-          'voided_at': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      final washData = washSnap.data();
+      final alreadyVoided = washData?['voided'] == true;
+      washLitres = (washData?['quantity_delta'] as num?)?.toDouble().abs() ?? 0;
+      if (!alreadyVoided) {
+        batch.set(
+          washRef,
+          {
+            'voided': true,
+            'void_reason': reason,
+            'voided_by_clock_no': actorClockNo,
+            'voided_by_name': actorName,
+            'voided_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+        if (washLitres > 0) {
+          _applyTankDeltaToBatch(
+            batch,
+            itemCode: kToloulItemCode,
+            delta: washLitres,
+            actorClockNo: actorClockNo,
+            actorName: actorName,
+          );
+        }
+      }
     }
     batch.set(
       ibcRef,
@@ -1523,6 +1789,16 @@ class InkService {
       },
       SetOptions(merge: true),
     );
+    // Reverse colour tank top-up from consume (once).
+    if (wasTransferred && isInkTankItem(ibc.itemCode) && ibc.kg != 0) {
+      _applyTankDeltaToBatch(
+        batch,
+        itemCode: ibc.itemCode,
+        delta: -ibc.kg,
+        actorClockNo: actorClockNo,
+        actorName: actorName,
+      );
+    }
     await WasteStockCrosslink.disposeIbcStockOnVoid(
       batch: batch,
       db: _db,
@@ -1748,6 +2024,20 @@ class InkService {
           purchaseOrderId: t.purchaseOrderId,
         ).toFirestore(),
       );
+      final tankDelta = tankBalanceDeltaForTxn(
+        type: t.type,
+        itemCode: t.stockItemCode,
+        quantityDelta: t.quantityDelta,
+      );
+      if (tankDelta != null) {
+        _applyTankDeltaToBatch(
+          batch,
+          itemCode: t.stockItemCode,
+          delta: tankDelta,
+          actorClockNo: actorClockNo,
+          actorName: actorName,
+        );
+      }
     }
     for (final l in toloulLines) {
       final docId = '${sessionId}_${l.pointId}';
@@ -2114,6 +2404,8 @@ class InkService {
         .get();
     final batch = _db.batch();
     for (final d in txnsSnap.docs) {
+      final data = d.data();
+      final alreadyVoided = data['voided'] == true;
       batch.set(
         d.reference,
         {
@@ -2125,6 +2417,26 @@ class InkService {
         },
         SetOptions(merge: true),
       );
+      if (!alreadyVoided) {
+        final type = InkTxnType.fromValue(data['type'] as String?);
+        final itemCode = data['stock_item_code'] as String? ?? '';
+        final qty = (data['quantity_delta'] as num?)?.toDouble() ?? 0;
+        final tankDelta = tankBalanceDeltaForTxn(
+          type: type,
+          itemCode: itemCode,
+          quantityDelta: qty,
+        );
+        // Reverse the original tank movement.
+        if (tankDelta != null) {
+          _applyTankDeltaToBatch(
+            batch,
+            itemCode: itemCode,
+            delta: -tankDelta,
+            actorClockNo: actorClockNo,
+            actorName: actorName,
+          );
+        }
+      }
     }
     for (final d in tolSnap.docs) {
       batch.delete(d.reference);

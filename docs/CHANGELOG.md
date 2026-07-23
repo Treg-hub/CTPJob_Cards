@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-23 — 2.3.0+188 — Ink factory tank levels
+
+### What you will notice
+
+- **Ink Factory** home shows live **tank fill bars** for Yellow, Red, Blue, Black, Binder, and Toloul (percent full in each colour).
+- Open the **tank icon** on the Ink Factory app bar to record tank levels and set capacity / low alerts.
+- Tanks turn **red** when below the low level you set.
+- Daily meter readings, IBC consume, binder production, and Toloul recovery keep the tank levels updated.
+
+---
+
 ## 2026-07-23 — 2.3.0+187 — Smaller app download
 
 ### What you will notice

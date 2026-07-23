@@ -12,12 +12,18 @@ import '../models/ink_settings.dart';
 import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_supplier.dart';
+import '../models/ink_tank_level.dart';
 import '../models/ink_transaction.dart';
 import '../services/ink_service.dart';
 import '../utils/ink_ibc_period.dart';
 import '../utils/ink_period.dart';
 
 final inkServiceProvider = Provider<InkService>((ref) => InkService());
+
+/// Live ops tank levels (Yellow…Toloul) for Ink Home + tank screen.
+final inkTankLevelsProvider = StreamProvider.autoDispose<List<InkTankLevel>>(
+  (ref) => ref.watch(inkServiceProvider).watchTankLevels(),
+);
 
 /// Current open count-to-count window (after latest month-end count, through now).
 final inkOpenPeriodRangeProvider = Provider<InkOpenPeriodRange>((ref) {
