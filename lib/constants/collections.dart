@@ -94,6 +94,8 @@ class Collections {
   // Cards. Append-only ledger; balances/WAC are derived by replay.
   // See docs/Ink_Factory_Migration_Plan.md for the full schema + domain model.
   static const String inkStockItems = 'ink_stock_items'; // doc id = item code
+  /// Ops tank levels (balance/capacity/low); doc id = item code. Not ledger WAC.
+  static const String inkTankLevels = 'ink_tank_levels';
   static const String inkTransactions = 'ink_transactions'; // append-only ledger
   static const String inkIbcs = 'ink_ibcs'; // IBC audit register
   static const String inkMeterSessions = 'ink_meter_sessions';

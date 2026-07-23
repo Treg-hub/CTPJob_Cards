@@ -3,14 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../constants/ink_toloul.dart';
 import '../models/ink_stock_item.dart';
+import '../models/ink_tank_level.dart';
 import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/ink_daily_readings_banner.dart';
+import '../widgets/ink_tank_fill_bar.dart';
 import 'ink_daily_readings_screen.dart';
 import 'ink_ibc_register_screen.dart';
 import 'ink_ibc_transfer_screen.dart';
@@ -18,8 +19,8 @@ import 'ink_production_run_screen.dart';
 import 'ink_select_ibc_shipment_screen.dart';
 import 'ink_select_local_order_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
+import 'ink_tank_levels_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
-import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ink_guide_banner.dart';
 
@@ -43,205 +44,123 @@ class InkHomeScreen extends ConsumerWidget {
     }
 
     final itemsAsync = ref.watch(inkStockItemsProvider);
-    final inkSettings = ref.watch(inkSettingsProvider).valueOrNull;
+    final tanksAsync = ref.watch(inkTankLevelsProvider);
     final readingsAsync = ref.watch(inkDailyReadingsStatusProvider);
     final readingsStatus = readingsAsync.valueOrNull;
     final isManager = role_utils.isInkManager(
         ref.watch(currentEmployeeProvider).valueOrNull);
-    InkStockItem? toloulItem;
-    for (final i in itemsAsync.valueOrNull ?? <InkStockItem>[]) {
-      if (i.isToloul) {
-        toloulItem = i;
-        break;
-      }
-    }
-    final factoryLowThreshold = inkSettings?.toloulFactoryLowLitres ??
-        kDefaultToloulFactoryLowLitres;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ink Factory')),
+      appBar: AppBar(
+        title: const Text('Ink Factory'),
+        actions: [
+          IconButton(
+            tooltip: 'Tank levels',
+            icon: const Icon(Icons.propane_tank_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InkTankLevelsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(inkStockItemsProvider);
           ref.invalidate(inkSettingsProvider);
+          ref.invalidate(inkTankLevelsProvider);
           await ref.read(inkStockItemsProvider.future);
         },
         child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          12,
-          12,
-          ScreenInsets.scrollBottomFullScreen(context),
-        ),
-        children: [
-          _StockQtySummary(
-            itemsAsync: itemsAsync,
-            toloulItem: toloulItem,
-            factoryLowThreshold: factoryLowThreshold,
+          padding: EdgeInsets.fromLTRB(
+            12,
+            12,
+            12,
+            ScreenInsets.scrollBottomFullScreen(context),
           ),
-          if (isManager) ...[
-            const SizedBox(height: 12),
-            _PulseManageCard(pulseUrl: _pulseInkUrl),
-          ],
-          if (readingsStatus != null && !readingsStatus.complete) ...[
-            const SizedBox(height: 12),
-            InkDailyReadingsBanner(status: readingsStatus),
-          ],
-          const SizedBox(height: 8),
-          const InkGuideBanner.home(),
-          const SizedBox(height: 16),
-          _sectionLabel(context, 'Capture'),
-          const SizedBox(height: 8),
-          _ActionGrid(actions: [
-            _Action(Icons.local_shipping_outlined, 'Receive Local',
-                builder: () => const InkSelectLocalOrderScreen()),
-            _Action(Icons.propane_tank_outlined, 'Receive Ink (IBC)',
-                builder: () => const InkSelectIbcShipmentScreen()),
-            _Action(Icons.speed_outlined, 'Meter Readings',
-                builder: () => const InkDailyReadingsScreen()),
-            _Action(Icons.swap_horiz_outlined, 'Consume IBC',
-                builder: () => const InkIbcTransferScreen()),
-            _Action(Icons.science_outlined, 'Production Run',
-                builder: () => const InkProductionRunScreen()),
-            _Action(
-              Icons.recycling_outlined,
-              'Toloul Recovery',
-              builder: () => const InkTolulRecoveryScreen(),
-              onLongPress: (ctx) => _showFactoryTankLowThresholdDialog(ctx, ref),
-            ),
-            _Action(Icons.inventory_2_outlined, 'IBC Register',
-                builder: () => const InkIbcRegisterScreen()),
-          ]),
-          const SizedBox(height: 20),
-          _sectionLabel(context, 'Stock on hand'),
-          const SizedBox(height: 4),
-          itemsAsync.when(
-            data: (items) => items.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: Text('No stock items yet.')),
-                  )
-                : Column(
-                    children: [
-                      for (final i in items) _StockTile(item: i),
-                    ],
-                  ),
-            loading: () => Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Loading stock…',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton.icon(
-                    onPressed: () {
-                      ref.invalidate(inkStockItemsProvider);
-                      ref.invalidate(inkSettingsProvider);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text('Could not load stock: $e'),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: () {
-                      ref.invalidate(inkStockItemsProvider);
-                      ref.invalidate(inkSettingsProvider);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      ),
-    );
-  }
-
-  static Future<void> _showFactoryTankLowThresholdDialog(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final settings = ref.read(inkSettingsProvider).valueOrNull;
-    final current =
-        settings?.toloulFactoryLowLitres ?? kDefaultToloulFactoryLowLitres;
-    final ctrl = TextEditingController(
-      text: current == current.roundToDouble()
-          ? current.toInt().toString()
-          : current.toString(),
-    );
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Toloul tank low alert'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Turn the summary card red when the ink-factory toloul tank '
-              'drops below this level (litres). Long-press Toloul Recovery to change.',
+            _StockQtySummary(
+              itemsAsync: itemsAsync,
+              tanksAsync: tanksAsync,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Low level (L)',
-                isDense: true,
+            if (isManager) ...[
+              const SizedBox(height: 12),
+              _PulseManageCard(pulseUrl: _pulseInkUrl),
+            ],
+            if (readingsStatus != null && !readingsStatus.complete) ...[
+              const SizedBox(height: 12),
+              InkDailyReadingsBanner(status: readingsStatus),
+            ],
+            const SizedBox(height: 8),
+            const InkGuideBanner.home(),
+            const SizedBox(height: 16),
+            _sectionLabel(context, 'Capture'),
+            const SizedBox(height: 8),
+            _ActionGrid(actions: [
+              _Action(Icons.local_shipping_outlined, 'Receive Local',
+                  builder: () => const InkSelectLocalOrderScreen()),
+              _Action(Icons.propane_tank_outlined, 'Receive Ink (IBC)',
+                  builder: () => const InkSelectIbcShipmentScreen()),
+              _Action(Icons.speed_outlined, 'Meter Readings',
+                  builder: () => const InkDailyReadingsScreen()),
+              _Action(Icons.swap_horiz_outlined, 'Consume IBC',
+                  builder: () => const InkIbcTransferScreen()),
+              _Action(Icons.science_outlined, 'Production Run',
+                  builder: () => const InkProductionRunScreen()),
+              _Action(
+                Icons.recycling_outlined,
+                'Toloul Recovery',
+                builder: () => const InkTolulRecoveryScreen(),
+              ),
+              _Action(Icons.inventory_2_outlined, 'IBC Register',
+                  builder: () => const InkIbcRegisterScreen()),
+            ]),
+            const SizedBox(height: 20),
+            _sectionLabel(context, 'Stock on hand'),
+            const SizedBox(height: 4),
+            itemsAsync.when(
+              data: (items) => items.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: Text('No stock items yet.')),
+                    )
+                  : Column(
+                      children: [
+                        for (final i in items) _StockTile(item: i),
+                      ],
+                    ),
+              loading: () => Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Loading stock…',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () {
+                        ref.invalidate(inkStockItemsProvider);
+                        ref.invalidate(inkSettingsProvider);
+                        ref.invalidate(inkTankLevelsProvider);
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+              error: (e, _) => Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Failed to load stock: $e'),
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
-    final thresholdText = ctrl.text.trim();
-    ctrl.dispose();
-    if (saved != true || !context.mounted) return;
-    final parsed = double.tryParse(thresholdText);
-    if (parsed == null || parsed < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid non-negative number.')),
-      );
-      return;
-    }
-    try {
-      await ref.read(inkServiceProvider).updateToloulFactoryLowThreshold(parsed);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Low level set to ${_qty.format(parsed)} L')),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save: $e')),
-      );
-    }
   }
 
   static Widget _sectionLabel(BuildContext context, String text) => Text(
@@ -292,12 +211,10 @@ class _Action {
     this.icon,
     this.label, {
     this.builder,
-    this.onLongPress,
   });
   final IconData icon;
   final String label;
   final Widget Function()? builder;
-  final void Function(BuildContext context)? onLongPress;
 }
 
 class _ActionGrid extends StatelessWidget {
@@ -338,9 +255,6 @@ class _ActionCard extends StatelessWidget {
                 context, MaterialPageRoute(builder: (_) => action.builder!()));
           }
         },
-        onLongPress: action.onLongPress != null
-            ? () => action.onLongPress!(context)
-            : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           child: Column(
@@ -363,94 +277,53 @@ class _ActionCard extends StatelessWidget {
 class _StockQtySummary extends StatelessWidget {
   const _StockQtySummary({
     required this.itemsAsync,
-    required this.toloulItem,
-    required this.factoryLowThreshold,
+    required this.tanksAsync,
   });
 
   final AsyncValue<List<InkStockItem>> itemsAsync;
-  final InkStockItem? toloulItem;
-  final double factoryLowThreshold;
+  final AsyncValue<List<InkTankLevel>> tanksAsync;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final count = itemsAsync.valueOrNull?.length ?? 0;
-    final factoryBalance = toloulItem?.operationalBalance;
-    final unit = toloulItem?.unit ?? 'LTS';
-    final isLow = factoryBalance != null && factoryBalance < factoryLowThreshold;
-    // Normal: Home quick-action tile wash (12%). Low: stronger red tint so it
-    // reads clearly against the orange OK state.
-    final accent = isLow ? kLowStockRed : kBrandOrange;
-    final tileColor = accent.withValues(alpha: isLow ? 0.30 : 0.12);
-    final borderColor = accent.withValues(alpha: isLow ? 0.90 : 0.45);
-    final borderWidth = isLow ? 1.4 : 0.8;
-    final textColor = Theme.of(context).brightness == Brightness.light
-        ? Colors.black87
-        : scheme.onSurface;
-    final tankValue = factoryBalance != null
-        ? '${InkHomeScreen._qty.format(factoryBalance)} $unit'
-        : '—';
+    final tanks = tanksAsync.valueOrNull ?? const <InkTankLevel>[];
 
-    return Card(
-      elevation: 0,
-      color: tileColor,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: borderColor, width: borderWidth),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              isLow ? Icons.warning_amber_rounded : Icons.inventory_2_outlined,
-              color: accent,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Stock on hand',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: textColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  Text(
-                    '$count items',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Stock on hand · $count items',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'Toloul tank',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: textColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                Text(
-                  tankValue,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: textColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-          ],
         ),
-      ),
+        const SizedBox(height: 8),
+        if (tanksAsync.isLoading && tanks.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final cross = width >= 520 ? 3 : 2;
+              final gap = 8.0;
+              final cardW = (width - gap * (cross - 1)) / cross;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final t in tanks)
+                    SizedBox(
+                      width: cardW,
+                      child: InkTankLevelCard(tank: t, compact: true),
+                    ),
+                ],
+              );
+            },
+          ),
+      ],
     );
   }
 }
@@ -464,7 +337,7 @@ class _StockTile extends StatelessWidget {
     final displayQty =
         item.isToloul ? item.operationalBalance : item.currentBalance;
     final subtitle = item.isToloul
-        ? 'Factory tank · consolidated ${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}'
+        ? 'Ledger · consolidated ${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}'
         : '${InkHomeScreen._qty.format(item.currentBalance)} ${item.unit}';
 
     return ListTile(
