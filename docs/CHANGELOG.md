@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-23 — 2.3.0+187 — Smaller app download
+
+### What you will notice
+
+- This update installs as a **smaller download** on most phones.
+- Barcode scanning, vehicle gate scans, and receipt scan work the same as before.
+
+---
+
 ## 2026-07-23 — 2.3.0+186 — Ink delivery note after receive
 
 ### What you will notice

@@ -49,8 +49,24 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Flutter 3.35+ pre-seeds abiFilters with armeabi-v7a + arm64-v8a + x86_64.
+        // Clear that set so staff APKs stay arm64-only (same phones as today; ~25+ MB smaller).
         ndk {
+            abiFilters.clear()
             abiFilters.add("arm64-v8a")
+        }
+    }
+
+    // Belt-and-suspenders: ML Kit / scanner AARs still ship multi-ABI .so files even when
+    // abiFilters is arm64-only. Strip them from the packaged APK so Hosting latest.apk
+    // stays a single arm64 artifact (no feature change for floor phones).
+    packaging {
+        jniLibs {
+            excludes += listOf(
+                "**/armeabi-v7a/**",
+                "**/x86/**",
+                "**/x86_64/**",
+            )
         }
     }
 
