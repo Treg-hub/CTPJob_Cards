@@ -5,11 +5,14 @@ import '../main.dart' show currentEmployee, realEmployee;
 import '../providers/fleet_provider.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/fleet_app_bar.dart';
 import 'fleet_mechanic_home_screen.dart';
 import 'fleet_reporter_home_screen.dart';
 
 /// Fleet Maintenance entry — floor roles only (reporter + mechanic).
 /// Cost managers and fleet admin use CTP Pulse.
+///
+/// Pushed from the Home tile (not a bottom-nav shell tab).
 class FleetHomeScreen extends ConsumerWidget {
   const FleetHomeScreen({super.key});
 
@@ -17,16 +20,22 @@ class FleetHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(fleetSettingsProvider);
     if (!settingsAsync.hasValue) {
-      return const Center(child: CircularProgressIndicator());
+      return const Scaffold(
+        appBar: FleetAppBar(title: 'Fleet Maintenance'),
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
     final settings = settingsAsync.requireValue;
     if (!settings.fleetEnabled) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Fleet Maintenance is not enabled.\nAsk an admin to turn it on in CTP Pulse Settings.',
-            textAlign: TextAlign.center,
+      return const Scaffold(
+        appBar: FleetAppBar(title: 'Fleet Maintenance'),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Fleet Maintenance is not enabled.\nAsk an admin to turn it on in CTP Pulse Settings.',
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       );
@@ -50,9 +59,10 @@ class FleetHomeScreen extends ConsumerWidget {
           message: PresenceGating.offSiteReporterFleetMessage,
         );
       }
-      return const FleetReporterHomeScreen();
+      return const FleetReporterHomeScreen(standalone: true);
     }
     return FleetMechanicHomeScreen(
+      standalone: true,
       includeMyReportsTab: isReporter && isMechanic,
     );
   }

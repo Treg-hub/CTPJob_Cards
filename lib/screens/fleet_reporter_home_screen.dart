@@ -190,6 +190,7 @@ class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScree
           ),
         TabBar(
           controller: _tabController,
+          isScrollable: false,
           labelStyle:
               const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           tabs: const [
@@ -227,7 +228,7 @@ class _FleetReporterHomeScreenState extends ConsumerState<FleetReporterHomeScree
 
     if (widget.standalone) {
       return Scaffold(
-        appBar: const FleetAppBar(title: 'Fleet — Machines'),
+        appBar: const FleetAppBar(title: 'Fleet Maintenance'),
         body: body,
       );
     }
@@ -382,7 +383,7 @@ class _ReportsTab extends StatelessWidget {
           child: SegmentedButton<bool>(
             segments: const [
               ButtonSegment(value: false, label: Text('My reports')),
-              ButtonSegment(value: true, label: Text('All open')),
+              ButtonSegment(value: true, label: Text('All faults')),
             ],
             selected: {showAllOpen},
             onSelectionChanged: (s) => onShowAllOpenChanged(s.first),
@@ -493,7 +494,7 @@ class FleetReporterMyReportsList extends StatelessWidget {
   }
 }
 
-/// All open floor issues — reporter-friendly labels.
+/// Shop-wide faults (open + in progress + resolved) — reporter transparency.
 class FleetReporterAllOpenList extends StatelessWidget {
   const FleetReporterAllOpenList({
     super.key,
@@ -506,7 +507,7 @@ class FleetReporterAllOpenList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<FleetIssue>>(
-      stream: service.watchOpenIssues(limit: 100),
+      stream: service.watchIssues(limit: 100),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -517,7 +518,7 @@ class FleetReporterAllOpenList extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(24),
               child: Text(
-                'No open problems. All clear!',
+                'No faults logged yet.',
                 textAlign: TextAlign.center,
               ),
             ),
