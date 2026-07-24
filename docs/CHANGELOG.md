@@ -6,6 +6,14 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-24 — 2.3.0+189 — Lurgi air condenser single meter
+
+### What you will notice
+
+- **Lurgi → Air Condenser** now asks for **one** meter reading instead of two.
+
+---
+
 ## 2026-07-23 — 2.3.0+188 — Ink factory tank levels
 
 ### What you will notice

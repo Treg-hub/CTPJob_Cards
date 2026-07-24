@@ -61,7 +61,6 @@ void main() {
         freshWater: 10,
         effluent: 5,
         airMeter1: 1,
-        airMeter2: 2,
         geyserTemp: 60,
         tank1Litres: 100,
         tank1Direction: 'in',

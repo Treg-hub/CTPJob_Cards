@@ -33,9 +33,7 @@ class LurgiDailyRound {
     this.waterByClock,
     this.waterByName,
     this.airMeter1,
-    this.airMeter2,
     this.airMeter1Reset = false,
-    this.airMeter2Reset = false,
     this.airAt,
     this.airByClock,
     this.airByName,
@@ -97,11 +95,9 @@ class LurgiDailyRound {
   final String? waterByClock;
   final String? waterByName;
 
-  // ── Air condenser ────────────────────────────────────────────────────────
+  // ── Air condenser (single meter) ─────────────────────────────────────────
   final double? airMeter1;
-  final double? airMeter2;
   final bool airMeter1Reset;
-  final bool airMeter2Reset;
   final DateTime? airAt;
   final String? airByClock;
   final String? airByName;
@@ -149,7 +145,7 @@ class LurgiDailyRound {
 
   bool get waterComplete => freshWater != null && effluent != null;
 
-  bool get airComplete => airMeter1 != null && airMeter2 != null;
+  bool get airComplete => airMeter1 != null;
 
   bool get geyserComplete => geyserTemp != null;
 
@@ -212,9 +208,7 @@ class LurgiDailyRound {
       waterByClock: d['water_by_clock'] as String?,
       waterByName: d['water_by_name'] as String?,
       airMeter1: _num(d['air_meter_1']),
-      airMeter2: _num(d['air_meter_2']),
       airMeter1Reset: d['air_meter_1_reset'] as bool? ?? false,
-      airMeter2Reset: d['air_meter_2_reset'] as bool? ?? false,
       airAt: _ts(d['air_at']),
       airByClock: d['air_by_clock'] as String?,
       airByName: d['air_by_name'] as String?,
@@ -294,9 +288,10 @@ class LurgiDailyRound {
     }
     if (includeAir) {
       m['air_meter_1'] = airMeter1;
-      m['air_meter_2'] = airMeter2;
       m['air_meter_1_reset'] = airMeter1Reset;
-      m['air_meter_2_reset'] = airMeter2Reset;
+      // Drop retired second condenser meter on next air save.
+      m['air_meter_2'] = FieldValue.delete();
+      m['air_meter_2_reset'] = FieldValue.delete();
       m['air_at'] = Timestamp.fromDate(now);
       m['air_by_clock'] = actorClockNo;
       m['air_by_name'] = actorName;
@@ -373,9 +368,7 @@ class LurgiDailyRound {
     bool? freshWaterReset,
     bool? effluentReset,
     double? airMeter1,
-    double? airMeter2,
     bool? airMeter1Reset,
-    bool? airMeter2Reset,
     double? geyserTemp,
     String? geyserComments,
     double? tank1Litres,
@@ -418,9 +411,7 @@ class LurgiDailyRound {
       waterByClock: waterByClock,
       waterByName: waterByName,
       airMeter1: airMeter1 ?? this.airMeter1,
-      airMeter2: airMeter2 ?? this.airMeter2,
       airMeter1Reset: airMeter1Reset ?? this.airMeter1Reset,
-      airMeter2Reset: airMeter2Reset ?? this.airMeter2Reset,
       airAt: airAt,
       airByClock: airByClock,
       airByName: airByName,
