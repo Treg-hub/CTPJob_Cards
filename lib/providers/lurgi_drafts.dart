@@ -16,7 +16,6 @@ class LurgiSectionFormDraft {
     this.fresh = '',
     this.effluent = '',
     this.air1 = '',
-    this.air2 = '',
     this.geyserTemp = '',
     this.geyserComments = '',
     this.tank1 = '',
@@ -32,7 +31,6 @@ class LurgiSectionFormDraft {
     this.freshReset = false,
     this.effluentReset = false,
     this.air1Reset = false,
-    this.air2Reset = false,
     this.effectiveAtMs,
     this.spanComment = '',
   });
@@ -44,7 +42,6 @@ class LurgiSectionFormDraft {
   final String fresh;
   final String effluent;
   final String air1;
-  final String air2;
   final String geyserTemp;
   final String geyserComments;
   final String tank1;
@@ -60,7 +57,6 @@ class LurgiSectionFormDraft {
   final bool freshReset;
   final bool effluentReset;
   final bool air1Reset;
-  final bool air2Reset;
   final int? effectiveAtMs;
   final String spanComment;
 
@@ -73,7 +69,6 @@ class LurgiSectionFormDraft {
         blank(fresh) &&
         blank(effluent) &&
         blank(air1) &&
-        blank(air2) &&
         blank(geyserTemp) &&
         blank(geyserComments) &&
         blank(tank1) &&
@@ -89,8 +84,7 @@ class LurgiSectionFormDraft {
         !softenerReset &&
         !freshReset &&
         !effluentReset &&
-        !air1Reset &&
-        !air2Reset;
+        !air1Reset;
   }
 }
 

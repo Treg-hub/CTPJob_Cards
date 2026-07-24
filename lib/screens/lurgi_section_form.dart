@@ -63,7 +63,6 @@ class _LurgiSectionFormScreenState
   late final TextEditingController _fresh;
   late final TextEditingController _effluent;
   late final TextEditingController _air1;
-  late final TextEditingController _air2;
   late final TextEditingController _geyserTemp;
   late final TextEditingController _geyserComments;
   late final TextEditingController _tank1;
@@ -81,7 +80,6 @@ class _LurgiSectionFormScreenState
   bool _freshReset = false;
   bool _effluentReset = false;
   bool _air1Reset = false;
-  bool _air2Reset = false;
   String? _seededForKey;
   bool _submitting = false;
   bool _loadedDraft = false;
@@ -112,7 +110,6 @@ class _LurgiSectionFormScreenState
     _fresh = TextEditingController(text: mem?.fresh ?? '');
     _effluent = TextEditingController(text: mem?.effluent ?? '');
     _air1 = TextEditingController(text: mem?.air1 ?? '');
-    _air2 = TextEditingController(text: mem?.air2 ?? '');
     _geyserTemp = TextEditingController(text: mem?.geyserTemp ?? '');
     _geyserComments = TextEditingController(text: mem?.geyserComments ?? '');
     _tank1 = TextEditingController(text: mem?.tank1 ?? '');
@@ -139,7 +136,6 @@ class _LurgiSectionFormScreenState
     _freshReset = draft.freshReset;
     _effluentReset = draft.effluentReset;
     _air1Reset = draft.air1Reset;
-    _air2Reset = draft.air2Reset;
     if (draft.effectiveAtMs != null) {
       _effectiveAt = DateTime.fromMillisecondsSinceEpoch(draft.effectiveAtMs!);
     }
@@ -157,7 +153,6 @@ class _LurgiSectionFormScreenState
     _fresh.text = disk.fresh;
     _effluent.text = disk.effluent;
     _air1.text = disk.air1;
-    _air2.text = disk.air2;
     _geyserTemp.text = disk.geyserTemp;
     _geyserComments.text = disk.geyserComments;
     _tank1.text = disk.tank1;
@@ -194,7 +189,6 @@ class _LurgiSectionFormScreenState
         fresh: _fresh.text,
         effluent: _effluent.text,
         air1: _air1.text,
-        air2: _air2.text,
         geyserTemp: _geyserTemp.text,
         geyserComments: _geyserComments.text,
         tank1: _tank1.text,
@@ -210,7 +204,6 @@ class _LurgiSectionFormScreenState
         freshReset: _freshReset,
         effluentReset: _effluentReset,
         air1Reset: _air1Reset,
-        air2Reset: _air2Reset,
         effectiveAtMs: _effectiveAt.millisecondsSinceEpoch,
         spanComment: _spanComment.text,
       );
@@ -237,7 +230,6 @@ class _LurgiSectionFormScreenState
     _fresh.dispose();
     _effluent.dispose();
     _air1.dispose();
-    _air2.dispose();
     _geyserTemp.dispose();
     _geyserComments.dispose();
     _tank1.dispose();
@@ -270,7 +262,6 @@ class _LurgiSectionFormScreenState
       setIf(_fresh, dayRound.freshWater);
       setIf(_effluent, dayRound.effluent);
       setIf(_air1, dayRound.airMeter1);
-      setIf(_air2, dayRound.airMeter2);
       setIf(_geyserTemp, dayRound.geyserTemp);
       if (dayRound.geyserComments != null &&
           _geyserComments.text.trim().isEmpty) {
@@ -301,7 +292,6 @@ class _LurgiSectionFormScreenState
         _freshReset = dayRound.freshWaterReset;
         _effluentReset = dayRound.effluentReset;
         _air1Reset = dayRound.airMeter1Reset;
-        _air2Reset = dayRound.airMeter2Reset;
       });
     });
   }
@@ -366,7 +356,7 @@ class _LurgiSectionFormScreenState
     }
 
     double? gasMech, gasElec, boiler, softener;
-    double? fresh, effluent, air1, air2, geyserTemp;
+    double? fresh, effluent, air1, geyserTemp;
     double? t1, t2, t3;
     String? t1d, t2d, t3d;
     String? geyserComments;
@@ -443,18 +433,11 @@ class _LurgiSectionFormScreenState
     }
     if (s.includeAir) {
       air1 = _parse(_air1.text);
-      air2 = _parse(_air2.text);
       if (air1 != null &&
           previous?.airMeter1 != null &&
           !_air1Reset &&
           air1 < previous!.airMeter1!) {
-        problems.add('Air meter 1: below last — tick meter reset');
-      }
-      if (air2 != null &&
-          previous?.airMeter2 != null &&
-          !_air2Reset &&
-          air2 < previous!.airMeter2!) {
-        problems.add('Air meter 2: below last — tick meter reset');
+        problems.add('Air condenser: below last — tick meter reset');
       }
     }
     if (s.includeGeyser) {
@@ -523,9 +506,7 @@ class _LurgiSectionFormScreenState
         freshWaterReset: _freshReset,
         effluentReset: _effluentReset,
         airMeter1: air1,
-        airMeter2: air2,
         airMeter1Reset: _air1Reset,
-        airMeter2Reset: _air2Reset,
         geyserTemp: geyserTemp,
         geyserComments: geyserComments,
         tank1Litres: t1,
@@ -781,18 +762,10 @@ class _LurgiSectionFormScreenState
                   _meterField(
                     context,
                     controller: _air1,
-                    label: 'Meter 1',
+                    label: 'Air condenser meter',
                     previous: previous?.airMeter1,
                     reset: _air1Reset,
                     onReset: (v) => setState(() => _air1Reset = v),
-                  ),
-                  _meterField(
-                    context,
-                    controller: _air2,
-                    label: 'Meter 2',
-                    previous: previous?.airMeter2,
-                    reset: _air2Reset,
-                    onReset: (v) => setState(() => _air2Reset = v),
                   ),
                 ],
               ),
