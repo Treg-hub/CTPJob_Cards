@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ctp_app_bar.dart';
 
 /// One-shot Press Live viewer (`press_live/current`). Refresh only — no listener.
 class PressLiveScreen extends StatefulWidget {
@@ -90,20 +91,25 @@ class _PressLiveScreenState extends State<PressLiveScreen> {
   }
 
   Color _toneColor(String? tone, String? status, ColorScheme scheme) {
+    final dark = scheme.brightness == Brightness.dark;
     final fromStatus = (status ?? '').toLowerCase();
+    // Dark theme uses brighter accents — green-800 / amber-700 wash out on
+    // near-black cards (dark-on-dark).
     if (tone == 'good' || fromStatus.contains('good copy')) {
-      return const Color(0xFF15803D);
+      return dark ? const Color(0xFF4ADE80) : const Color(0xFF15803D);
     }
     if (tone == 'bad' || fromStatus.contains('bad copy')) {
-      return const Color(0xFFB45309);
+      return dark ? const Color(0xFFFBBF24) : const Color(0xFFB45309);
     }
     if (tone == 'idle' ||
         fromStatus.contains('waiting') ||
         fromStatus.contains('idle')) {
-      return const Color(0xFFB91C1C);
+      return dark ? const Color(0xFFF87171) : const Color(0xFFB91C1C);
     }
-    if (tone == 'warn') return const Color(0xFFC2410C);
-    return scheme.outline;
+    if (tone == 'warn') {
+      return dark ? const Color(0xFFFB923C) : const Color(0xFFC2410C);
+    }
+    return dark ? scheme.onSurfaceVariant : scheme.outline;
   }
 
   String _fmtNum(dynamic v) {
@@ -132,23 +138,31 @@ class _PressLiveScreenState extends State<PressLiveScreen> {
     final updateLabel = _appBarUpdateLabel();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Press Live'),
-            Text(
-              updateLabel,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: _isStale ? const Color(0xFFB45309) : muted,
+      // Match Job Cards chrome (brand orange + on-site gradient). The previous
+      // flat scheme.surface AppBar was dark-on-dark against scaffold #000.
+      appBar: CtpAppBar(
+        title: 'Press Live',
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(22),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                updateLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  // Black/dark on orange bar — not muted white (was unreadable
+                  // intent on the old dark AppBar; stale stays high-contrast).
+                  color: _isStale
+                      ? const Color(0xFF7C2D12)
+                      : Colors.black.withValues(alpha: 0.75),
+                ),
               ),
             ),
-          ],
+          ),
         ),
-        backgroundColor: scheme.surface,
-        surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -157,15 +171,21 @@ class _PressLiveScreenState extends State<PressLiveScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.black,
+                    ),
                   )
                 : const Icon(Icons.refresh),
           ),
         ],
       ),
       body: _loading && _data == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(color: scheme.primary),
+            )
           : RefreshIndicator(
+              color: scheme.primary,
               onRefresh: _load,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -251,6 +271,8 @@ class _PressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).appColors.textMuted;
+    final scheme = Theme.of(context).colorScheme;
+    final onSurface = scheme.onSurface;
     final name = (data['pressName'] ?? data['pressId'] ?? 'Press').toString();
     final status = (data['status'] ?? '—').toString();
     final dur = duration(data['statusDurationMin']);
@@ -260,12 +282,24 @@ class _PressCard extends StatelessWidget {
     final pctVal = pct is num ? (pct.clamp(0, 100) / 100.0) : 0.0;
     final op = data['operatorName']?.toString();
     final statusLabel = dur.isEmpty ? status : '$status · $dur';
+    // Elevate slightly above pure-black scaffold (#000) — cardSurface alone
+    // (#1A1A1A) reads as dark-on-dark without a stroke.
+    final cardBg = scheme.brightness == Brightness.dark
+        ? const Color(0xFF242424)
+        : Theme.of(context).appColors.cardSurface;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      color: Theme.of(context).appColors.cardSurface,
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: cardBg,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: scheme.outlineVariant.withValues(
+            alpha: scheme.brightness == Brightness.dark ? 0.55 : 0.35,
+          ),
+        ),
+      ),
       child: InkWell(
         onTap: onToggle,
         borderRadius: BorderRadius.circular(12),
@@ -280,10 +314,11 @@ class _PressCard extends StatelessWidget {
                   Flexible(
                     child: Text(
                       name.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                         letterSpacing: 0.35,
+                        color: onSurface,
                       ),
                     ),
                   ),
@@ -297,10 +332,10 @@ class _PressCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: toneColor.withValues(alpha: 0.12),
+                          color: toneColor.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: toneColor.withValues(alpha: 0.45),
+                            color: toneColor.withValues(alpha: 0.55),
                           ),
                         ),
                         child: Text(
@@ -329,9 +364,10 @@ class _PressCard extends StatelessWidget {
                   (jobName != null && jobName.isNotEmpty) ? jobName : jobId!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
+                    color: onSurface,
                   ),
                 ),
                 if (expanded &&
@@ -353,7 +389,7 @@ class _PressCard extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: pctVal,
                         minHeight: 8,
-                        backgroundColor: muted.withValues(alpha: 0.15),
+                        backgroundColor: onSurface.withValues(alpha: 0.14),
                         color: toneColor,
                       ),
                     ),
@@ -431,13 +467,18 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).appColors.textMuted;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: TextStyle(fontSize: 10, color: muted)),
         Text(
           value,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: onSurface,
+          ),
         ),
       ],
     );

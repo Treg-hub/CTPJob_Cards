@@ -85,29 +85,35 @@ Guards (not security managers) see a **module hub** instead of job-card quick ac
 
 #### Standard layout (everyone else)
 
-Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and a **Quick Actions** grid to navigate everywhere else. Tiles are colour-grouped: job-card actions **orange**, Ink Factory / Daily Readings **cyan**, Fleet actions **slate**, Daily Review **gold**. On phones the grid is 3 columns with a fixed tile height; on tablet/desktop it flows into as many columns as fit (capped tile width) at the same fixed height so tiles never balloon vertically. Corner radius is 10px.
+Shows the logged-in employee, a live **On-Site / Off-Site** indicator, an employee directory, and **Quick Actions** partitioned into labeled sections when more than one group is visible: **Job Cards**, **Fleet**, **Ink & Plant**, **Tools**. Section titles are centered above each Wrap. Tiles use Option C high-contrast group tints (18% wash / 55% border): Job Cards brand orange, Fleet slate, Ink cyan, Lurgi indigo, Tools emerald / deep teal / orange / magenta / gold. On phones each section is a 3-column Wrap with a fixed tile height; on tablet/desktop tiles flow into as many columns as fit (capped tile width). Corner radius is 10px. Inter-section gaps are larger than in-group spacing.
 
 **Managers** (`position` contains "manager", or `department == "general"`) also see **Recent Job Cards** below Quick Actions — open and in-progress jobs with a **Show Dept Only** filter. Operators and technicians do not see this section.
 
 When today's ink/toloul readings are incomplete, ink-meter users see an **Ink daily readings** banner (cyan, same tint as Ink tiles) above Quick Actions.
 
-##### Standard Tiles
+##### Job Cards tiles
 
-- `Create Job Card` — **hidden when the employee is off-site** (`isOnSite: false`); off-site employees must be on-site to create new jobs
-- `My Assigned Jobs`
-- `View Job Cards`
+- `Create Job` — **disabled (greyed) when off-site** (`isOnSite: false`); tap shows why. Destination screen title remains Create Job Card
+- `View Jobs`
 - `Job History` — server-filtered search of closed job cards (see [Job Card History](#job-card-history))
-- `Settings`
 
-##### Manager-Only Tiles
+##### Fleet tiles (when gated)
 
-- `Manager Dashboard` — shown when `position` contains "manager"
-- `Monitoring Dashboard`
-- `Daily Review` with pulse animation when pending count > 5
+- `Fleet`, `Report Problem`, `Daily Check`
 
-##### Admin-Only Tiles
+##### Ink & plant tiles (when gated / on-site)
 
-- `Admin` — shown when the logged-in employee is on the admin whitelist
+- `Ink Factory`, `Lurgi`, `Readings` (standalone Home tile for non-Lurgi meter users; Lurgi uses the hub)
+
+##### Tools tiles (when gated)
+
+- `Timesheet` (destination: My Timesheet hub)
+- `Press Live`
+- `Dept Requests` then `All Dept Req` (adjacent; manager and/or admin)
+- `Feedback` (admin triage)
+- `Daily Review` (web managers; pulse when pending count > 5)
+
+> **Info:** Bottom-nav modules (Copper / Waste / Security) are **not** Quick Action tiles. Personal **Settings** is the AppBar gear, not a Home tile.
 
 > **Info:** The On-Site indicator reflects the live value of `employees/{clockNo}.isOnSite`, which is driven by background geofencing in `location_service.dart`.
 
@@ -716,7 +722,7 @@ Operator **capture hub** on mobile. Management, costing, and month-end workflows
 
 `lib/screens/ink_daily_readings_screen.dart` — **Roles:** Ink operator, Ink manager, Lurgi user, Admin
 
-Single combined screen for all daily meter readings. Shown via **Lurgi hub → Daily Readings** for Lurgi staff, via the **Daily Readings** home tile for Ink (and other non-Lurgi meter users), and via the **Meter Readings** capture tile in the Ink hub.
+Single combined screen for all daily meter readings. Shown via **Lurgi hub → Daily Readings** for Lurgi staff, via the **Readings** home tile for Ink (and other non-Lurgi meter users), and via the **Meter Readings** capture tile in the Ink hub.
 
 #### Layout
 

@@ -10,7 +10,7 @@ class InkDailyReadingsBanner extends StatelessWidget {
 
   final InkDailyReadingsStatus status;
 
-  // Ink group colour — matches Ink Factory / Daily Readings tiles on Home.
+  // Ink group colour — matches Ink Factory / Readings tiles on Home.
   static const Color _ink = kInkModule;
 
   @override
