@@ -506,6 +506,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           ref.invalidate(currentEmployeeProvider);
           // If first-frame update check already ran without us, re-match channels.
           _maybeRecheckUpdateForCohort();
+          unawaited(_loadPressLiveAccess());
         }
       }
 
@@ -956,6 +957,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     ref.invalidate(currentEmployeeProvider);
     _maybeOpenFleetForMechanic();
     _maybeRecheckUpdateForCohort();
+    // Re-evaluate after employee is known (initState often ran with null clock).
+    unawaited(_loadPressLiveAccess());
   }
 
   /// Re-resolve update channels after a deferred employee load so Ink/testers
@@ -1178,6 +1181,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       isOnSite = realEmployee!.isOnSite;
       _previousIsOnSite = realEmployee!.isOnSite;
       _setupEmployeeStream(realEmployee!.clockNo);
+      unawaited(_loadPressLiveAccess());
     } else {
       _tryLoadCurrentEmployee();
     }
