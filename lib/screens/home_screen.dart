@@ -595,237 +595,228 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return job.department == emp.department;
   }
 
-  // Quick Actions tile colours are grouped by function so linked tiles read
-  // as a set: job-card actions share the brand orange, ink shares cyan,
-  // fleet shares slate, and Daily Review is gold.
-  static const Color _jobCardsGroup = kBrandOrange;
-  static const Color _inkGroup = kInkModule;
-  static const Color _lurgiGroup = kLurgiModule;
-  static const Color _fleetGroup = Color(0xFF64748B); // slate
-  // Daily Review (gold/amber) is the separate _DailyReviewTile widget, which
-  // carries its own amber constant so its pulse animation can override it.
+  // Quick Actions tile colours — Option C high-contrast palette (Job Cards
+  // stays brand orange). Linked tiles share a group colour; wash/border alphas
+  // are applied in _buildQuickActionCard.
+  static const Color _jobCardsGroup = kBrandOrange; // #C25F3A locked
+  static const Color _inkGroup = kInkModule; // #22D3EE
+  static const Color _lurgiGroup = kLurgiModule; // #6366F1
+  static const Color _fleetGroup = Color(0xFF334155);
+  static const Color _deptRequestsGroup = Color(0xFFEA580C);
+  static const Color _timesheetGroup = Color(0xFF10B981);
+  static const Color _pressLiveGroup = Color(0xFF0D9488);
+  static const Color _feedbackGroup = Color(0xFFC026D3);
+  // Daily Review (gold) is the separate _DailyReviewTile widget.
+  static const double _tileWashAlpha = 0.18;
+  static const double _tileBorderAlpha = 0.55;
 
-  List<Map<String, dynamic>> _quickActions(WorkReportSettings? workReportSettings) {
-    final createAction = {'title': 'Create Job Card', 'icon': Icons.add_circle, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateJobCardScreen()))};
-    final historyAction = {'title': 'Job History', 'icon': Icons.history, 'color': _jobCardsGroup, 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()))};
-
-    List<Map<String, dynamic>> result;
-    if (isManager || isSuperManager) {
-      final viewJobsFactory = {
-        'title': 'View Jobs',
-        'icon': Icons.factory,
-        'color': _jobCardsGroup,
-        'badgeCount': _openJobCount + _inProgressCount,
-        'onTap': () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
-            ),
+  Map<String, dynamic> _deptRequestsAction() => {
+        'title': 'Dept Requests',
+        'icon': Icons.swap_horiz,
+        'color': _deptRequestsGroup,
+        'badgeCount': _deptRequestOpenCount,
+        'attention': _deptRequestHasNew && _deptRequestOpenCount > 0,
+        'onTap': () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DeptRequestsScreen()),
+          );
+          if (mounted) _setupDeptRequestSubscription();
+        },
       };
-      // Dept Requests: manager title only (rules use position contains manager).
-      if (isManager || role_utils.isAdmin(currentEmployee)) {
-        result = [
-          createAction,
-          viewJobsFactory,
-          historyAction,
-          {
-            'title': 'Dept Requests',
-            'icon': Icons.swap_horiz,
-            'color': const Color(0xFFD97706), // amber — manager group
-            'badgeCount': _deptRequestOpenCount,
-            'attention': _deptRequestHasNew && _deptRequestOpenCount > 0,
-            'onTap': () async {
-              await Navigator.push(
+
+  /// Role-gated Quick Actions partitioned into labeled sections. Empty sections
+  /// are dropped by [_buildQuickActionsGrid]. Dept Requests sits in Tools
+  /// next to All Dept Req (not in Job Cards).
+  List<_QuickActionSection> _quickActionSections(
+      WorkReportSettings? workReportSettings) {
+    final createAction = {
+      'title': 'Create Job',
+      'icon': Icons.add_circle,
+      'color': _jobCardsGroup,
+      'onTap': () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CreateJobCardScreen()),
+          ),
+    };
+    final historyAction = {
+      'title': 'Job History',
+      'icon': Icons.history,
+      'color': _jobCardsGroup,
+      'onTap': () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const JobCardHistoryScreen()),
+          ),
+    };
+
+    final List<Map<String, dynamic>> jobCards;
+    if (isManager || isSuperManager) {
+      jobCards = [
+        createAction,
+        {
+          'title': 'View Jobs',
+          'icon': Icons.factory,
+          'color': _jobCardsGroup,
+          'badgeCount': _openJobCount + _inProgressCount,
+          'onTap': () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const DeptRequestsScreen()),
-              );
-              if (mounted) _setupDeptRequestSubscription();
-            },
-          },
-        ];
-      } else {
-        result = [createAction, viewJobsFactory, historyAction];
-      }
+                MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
+              ),
+        },
+        historyAction,
+      ];
     } else {
       // Operators: no live open-count badge (avoids factory-wide active-jobs listener).
-      final viewJobsAction = {
-        'title': 'View Jobs',
-        'icon': Icons.list_alt,
-        'color': _jobCardsGroup,
-        'onTap': () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
-            ),
-      };
-      result = [createAction, viewJobsAction, historyAction];
+      jobCards = [
+        createAction,
+        {
+          'title': 'View Jobs',
+          'icon': Icons.list_alt,
+          'color': _jobCardsGroup,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ViewJobCardsScreen()),
+              ),
+        },
+        historyAction,
+      ];
     }
 
     if (!_canCreateJobCard) {
       createAction['disabledReason'] = PresenceGating.offSiteCreateJobMessage;
     }
+
+    final fleet = <Map<String, dynamic>>[];
     if (_isFleetUser) {
-      result = [
-        ...result,
-        {
-          'title': 'Fleet',
-          'icon': Icons.forklift,
-          'color': _fleetGroup,
-          'onTap': _openFleetModule,
-        },
-      ];
+      fleet.add({
+        'title': 'Fleet',
+        'icon': Icons.forklift,
+        'color': _fleetGroup,
+        'onTap': _openFleetModule,
+      });
     }
     if (_canReportFleetIssue) {
-      result = [
-        ...result,
-        {
-          'title': FleetLabels.reportProblem,
-          'icon': Icons.report_problem_outlined,
-          'color': _fleetGroup,
-          'onTap': () => openFleetReportWizard(context, forceStep1: true),
-        },
-      ];
+      fleet.add({
+        'title': FleetLabels.reportProblem,
+        'icon': Icons.report_problem_outlined,
+        'color': _fleetGroup,
+        'onTap': () => openFleetReportWizard(context, forceStep1: true),
+      });
     }
     if (_canDoFleetDailyCheck) {
-      result = [
-        ...result,
-        {
-          // Home tile uses the shorter "Daily Check" label.
-          'title': 'Daily Check',
-          'icon': Icons.fact_check_outlined,
-          'color': _fleetGroup,
-          'onTap': _openFleetMachinesTab,
-        },
-      ];
+      fleet.add({
+        // Home tile uses the shorter "Daily Check" label.
+        'title': 'Daily Check',
+        'icon': Icons.fact_check_outlined,
+        'color': _fleetGroup,
+        'onTap': _openFleetMachinesTab,
+      });
     }
+
+    final inkPlant = <Map<String, dynamic>>[];
     if (_canUseOnSiteModules && role_utils.isInkUser(currentEmployee)) {
       final inkEnabled =
           ref.watch(inkSettingsProvider).valueOrNull?.inkEnabled ?? true;
       if (inkEnabled) {
-        result = [
-          ...result,
-          {
-            'title': 'Ink Factory',
-            'icon': Icons.water_drop,
-            'color': _inkGroup,
-            'onTap': () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const InkHomeScreen()),
-                ),
-          },
-        ];
+        inkPlant.add({
+          'title': 'Ink Factory',
+          'icon': Icons.water_drop,
+          'color': _inkGroup,
+          'onTap': () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const InkHomeScreen()),
+              ),
+        });
       }
     }
     // Lurgi hub (dept + admin). Pure Lurgi staff use the hub for Daily Readings.
     if (_canUseOnSiteModules && role_utils.isLurgiUser(currentEmployee)) {
-      result = [
-        ...result,
-        {
-          'title': 'Lurgi',
-          'icon': Icons.factory_outlined,
-          'color': _lurgiGroup,
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LurgiHomeScreen()),
-              ),
-        },
-      ];
+      inkPlant.add({
+        'title': 'Lurgi',
+        'icon': Icons.factory_outlined,
+        'color': _lurgiGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LurgiHomeScreen()),
+            ),
+      });
     }
     // Ink (and non-Lurgi meter users): standalone Daily Readings on Home.
     // Lurgi dept opens the same screen from the Lurgi hub.
     if (_canUseOnSiteModules &&
         role_utils.isInkMeterUser(currentEmployee) &&
         currentEmployee?.department != role_utils.lurgiDepartment) {
-      result = [
-        ...result,
-        {
-          'title': 'Daily Readings',
-          'icon': Icons.speed,
-          'color': _inkGroup,
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const InkDailyReadingsScreen()),
-              ),
-        },
-      ];
+      inkPlant.add({
+        'title': 'Readings',
+        'icon': Icons.speed,
+        'color': _inkGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InkDailyReadingsScreen()),
+            ),
+      });
     }
+
+    final tools = <Map<String, dynamic>>[];
     if (role_utils.canUseWorkReportModule(
         currentEmployee, workReportSettings)) {
-      result = [
-        ...result,
-        {
-          'title': 'My Timesheet',
-          'icon': Icons.schedule,
-          'color': const Color(0xFF0D9488),
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const WorkReportHubScreen()),
-              ),
-        },
-      ];
+      tools.add({
+        'title': 'Timesheet',
+        'icon': Icons.schedule,
+        'color': _timesheetGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WorkReportHubScreen()),
+            ),
+      });
     }
     if (_canViewPressLive) {
-      result = [
-        ...result,
-        {
-          'title': 'Press Live',
-          'icon': Icons.precision_manufacturing_outlined,
-          'color': const Color(0xFF0F766E),
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PressLiveScreen()),
-              ),
-        },
-      ];
+      tools.add({
+        'title': 'Press Live',
+        'icon': Icons.sensors_outlined,
+        'color': _pressLiveGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PressLiveScreen()),
+            ),
+      });
     }
-    // Admin feedback triage — kept on Home so it stays one tap away after
-    // Factory Admin Overview regrouping (no longer under Admin Settings dump).
+    // Dept Requests + All Dept Req stay adjacent in My work / tools.
+    // Manager title or admin (rules use position contains manager).
+    if (isManager || role_utils.isAdmin(currentEmployee)) {
+      tools.add(_deptRequestsAction());
+    }
     if (role_utils.isAdmin(currentEmployee)) {
-      // Pure admin (no manager title) still needs the create/list surface.
-      final hasDeptTile =
-          result.any((a) => a['title'] == 'Dept Requests');
-      result = [
-        ...result,
-        if (!hasDeptTile)
-          {
-            'title': 'Dept Requests',
-            'icon': Icons.swap_horiz,
-            'color': const Color(0xFFD97706),
-            'badgeCount': _deptRequestOpenCount,
-            'attention': _deptRequestHasNew && _deptRequestOpenCount > 0,
-            'onTap': () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const DeptRequestsScreen()),
-              );
-              if (mounted) _setupDeptRequestSubscription();
-            },
-          },
-        {
-          'title': 'Feedback',
-          'icon': Icons.feedback_outlined,
-          'color': const Color(0xFF7C3AED),
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const FeedbackAdminScreen()),
-              ),
-        },
-        {
-          'title': 'All Dept Req',
-          'icon': Icons.hub_outlined,
-          'color': const Color(0xFFD97706),
-          'onTap': () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const DeptRequestAdminScreen()),
-              ),
-        },
-      ];
+      tools.add({
+        'title': 'All Dept Req',
+        'icon': Icons.hub_outlined,
+        'color': _deptRequestsGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DeptRequestAdminScreen()),
+            ),
+      });
+      // Admin feedback triage — kept on Home so it stays one tap away after
+      // Factory Admin Overview regrouping (no longer under Admin Settings dump).
+      tools.add({
+        'title': 'Feedback',
+        'icon': Icons.feedback_outlined,
+        'color': _feedbackGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FeedbackAdminScreen()),
+            ),
+      });
     }
+
     // Vehicle at Gate / On-Foot Visitor are reached from the Security tab, not
     // the Home quick actions. Scan Tester lives under Factory Admin → Tools.
-    return result;
+    return [
+      _QuickActionSection(id: 'jobCards', label: 'Job Cards', actions: jobCards),
+      _QuickActionSection(id: 'fleet', label: 'Fleet', actions: fleet),
+      _QuickActionSection(id: 'inkPlant', label: 'Ink & Plant', actions: inkPlant),
+      _QuickActionSection(id: 'tools', label: 'Tools', actions: tools),
+    ].where((s) => s.actions.isNotEmpty).toList();
   }
 
   double get _iconSize => _isDesktop ? 40 : (_isTablet ? 42 : 40);
@@ -839,9 +830,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   // Fixed tile height so Quick Actions can span the full width without the
   // tiles ballooning vertically — they stretch across, but never grow tall.
-  // Desktop/tablet need a few extra px — icon + label + vertical padding was
-  // overflowing by 1px on wide layouts with the old 104/112 extents.
-  double get _gridTileHeight => _isDesktop ? 108 : (_isTablet ? 110 : 116);
+  // Phone gets a bit more room for two-line labels (Create Job, Report Problem).
+  double get _gridTileHeight => _isDesktop ? 112 : (_isTablet ? 114 : 124);
+
+  /// Gap between Quick Action sections (larger than in-group [_gridSpacing]).
+  double get _sectionGap => _isDesktop ? 24 : 20;
 
   // Success flags for the one-shot module-settings loads. A load that
   // returned defaults for a missing doc still counts as success (the server
@@ -1609,17 +1602,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   error: (_, __) => const SizedBox.shrink(),
                 ),
           ],
-          Center(
-            child: Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: _isDesktop ? 18 : 20,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
           _buildQuickActionsGrid(),
 
           const SizedBox(height: 24),
@@ -1663,61 +1645,179 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-  /// Tile width for Quick Actions — matches [SliverGridDelegateWithMaxCrossAxisExtent]
-  /// on wide layouts so tiles don't balloon, but uses the phone column count below 600px.
+  /// Tile width for Quick Actions.
+  /// Phone: equal 3-column width. Wide: compact preferred extent so more
+  /// columns fill the available row (section panel or full width).
   double _quickActionTileWidth(double availableWidth) {
-    if (_isDesktop || _isTablet) {
-      final maxExtent = _isDesktop ? 210.0 : 200.0;
-      final columns = ((availableWidth + _gridSpacing) / (maxExtent + _gridSpacing))
-          .ceil()
-          .clamp(1, 99);
-      return (availableWidth - _gridSpacing * (columns - 1)) / columns;
+    if (!_isDesktop && !_isTablet) {
+      return (availableWidth - _gridSpacing * (_gridColumns - 1)) / _gridColumns;
     }
-    return (availableWidth - _gridSpacing * (_gridColumns - 1)) / _gridColumns;
+    final preferred = _isDesktop ? 168.0 : 176.0;
+    final columns =
+        ((availableWidth + _gridSpacing) / (preferred + _gridSpacing))
+            .floor()
+            .clamp(3, 8);
+    return (availableWidth - _gridSpacing * (columns - 1)) / columns;
+  }
+
+  List<Widget> _quickActionTilesForSection(_QuickActionSection section) {
+    return [
+      ...section.actions.map(
+        (action) => _buildQuickActionCard(
+          action['title'] as String,
+          action['icon'] as IconData,
+          action['color'] as Color,
+          action['onTap'] as VoidCallback,
+          disabledReason: action['disabledReason'] as String?,
+          badgeCount: action['badgeCount'] as int?,
+          attention: action['attention'] as bool? ?? false,
+        ),
+      ),
+      ...section.extraTiles,
+    ];
+  }
+
+  Widget _buildQuickActionSectionBlock({
+    required _QuickActionSection section,
+    required double tileWidth,
+    required bool showHeader,
+    required bool wideLayout,
+  }) {
+    final tiles = _quickActionTilesForSection(section);
+    return Column(
+      crossAxisAlignment:
+          wideLayout ? CrossAxisAlignment.start : CrossAxisAlignment.stretch,
+      children: [
+        if (showHeader)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              section.label,
+              textAlign: wideLayout ? TextAlign.left : TextAlign.center,
+              style: TextStyle(
+                fontSize: wideLayout ? 13 : 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurfaceVariant
+                    .withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+        Wrap(
+          alignment: wideLayout ? WrapAlignment.start : WrapAlignment.center,
+          spacing: _gridSpacing,
+          runSpacing: _gridSpacing,
+          children: tiles
+              .map(
+                (tile) => SizedBox(
+                  width: tileWidth,
+                  height: _gridTileHeight,
+                  child: tile,
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
   }
 
   Widget _buildQuickActionsGrid() {
     final workReportSettings =
         ref.watch(workReportSettingsProvider).valueOrNull;
-    final tiles = <Widget>[
-      ..._quickActions(workReportSettings).map((action) => _buildQuickActionCard(
-            action['title'] as String,
-            action['icon'] as IconData,
-            action['color'] as Color,
-            action['onTap'] as VoidCallback,
-            disabledReason: action['disabledReason'] as String?,
-            badgeCount: action['badgeCount'] as int?,
-            attention: action['attention'] as bool? ?? false,
-          )),
-      if (kIsWeb && (isManager || isSuperManager))
-        _DailyReviewTile(
-          pendingCount: _pendingReviewCount,
-          iconSize: _iconSize,
-          padding: _cardPaddingInsets,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
-          ),
-        ),
-    ];
+    final sections = _quickActionSections(workReportSettings);
 
-    // Wrap + center on every breakpoint so a partial row (e.g. three mechanic
-    // tiles on a wide web window) sits in the middle instead of hugging the left
-    // edge. GridView left-aligns spare columns, which is what the screenshot showed.
+    // Daily Review is a manager/web-only tile that lives in Tools.
+    final showDailyReview = kIsWeb && (isManager || isSuperManager);
+    if (showDailyReview) {
+      final toolsIdx = sections.indexWhere((s) => s.id == 'tools');
+      if (toolsIdx >= 0) {
+        sections[toolsIdx].extraTiles.add(
+          _DailyReviewTile(
+            pendingCount: _pendingReviewCount,
+            iconSize: _iconSize,
+            padding: _cardPaddingInsets,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+            ),
+          ),
+        );
+      } else {
+        sections.add(
+          _QuickActionSection(
+            id: 'tools',
+            label: 'Tools',
+            actions: const [],
+            extraTiles: [
+              _DailyReviewTile(
+                pendingCount: _pendingReviewCount,
+                iconSize: _iconSize,
+                padding: _cardPaddingInsets,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DailyReviewScreen()),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
+    final nonEmpty = sections
+        .where((s) => s.actions.isNotEmpty || s.extraTiles.isNotEmpty)
+        .toList();
+    if (nonEmpty.isEmpty) return const SizedBox.shrink();
+
+    final showHeaders = nonEmpty.length > 1;
+
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Desktop web: two section columns so Home uses the width instead of
+        // a single centered strip of 3–6 tiles.
+        final useSectionColumns = _isDesktop && nonEmpty.length >= 2;
+        if (useSectionColumns) {
+          const sectionGap = 20.0;
+          final sectionWidth = (constraints.maxWidth - sectionGap) / 2;
+          final tileWidth = _quickActionTileWidth(sectionWidth);
+          return Wrap(
+            spacing: sectionGap,
+            runSpacing: _sectionGap,
+            alignment: WrapAlignment.start,
+            children: [
+              for (final section in nonEmpty)
+                SizedBox(
+                  width: sectionWidth,
+                  child: _buildQuickActionSectionBlock(
+                    section: section,
+                    tileWidth: tileWidth,
+                    showHeader: showHeaders,
+                    wideLayout: true,
+                  ),
+                ),
+            ],
+          );
+        }
+
         final tileWidth = _quickActionTileWidth(constraints.maxWidth);
-        return Wrap(
-          alignment: WrapAlignment.center,
-          spacing: _gridSpacing,
-          runSpacing: _gridSpacing,
-          children: tiles
-              .map((tile) => SizedBox(
-                    width: tileWidth,
-                    height: _gridTileHeight,
-                    child: tile,
-                  ))
-              .toList(),
+        final wideLayout = _isTablet;
+        final children = <Widget>[];
+        for (var i = 0; i < nonEmpty.length; i++) {
+          if (i > 0) children.add(SizedBox(height: _sectionGap));
+          children.add(
+            _buildQuickActionSectionBlock(
+              section: nonEmpty[i],
+              tileWidth: tileWidth,
+              showHeader: showHeaders,
+              wideLayout: wideLayout,
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
         );
       },
     );
@@ -1728,13 +1828,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     final disabled = disabledReason != null;
     // Flat tile tinted with its group colour (wash + matching border) so
     // linked tiles read as a set. Disabled tiles fall back to a neutral
-    // surface. See _quickActions for the group→colour mapping.
+    // surface. See _quickActionSections for the group→colour mapping.
     final scheme = Theme.of(context).colorScheme;
     final tileColor = disabled
         ? scheme.surfaceContainerHighest
-        : color.withValues(alpha: 0.12);
+        : color.withValues(alpha: _tileWashAlpha);
     final borderColor =
-        disabled ? scheme.outlineVariant : color.withValues(alpha: 0.45);
+        disabled ? scheme.outlineVariant : color.withValues(alpha: _tileBorderAlpha);
     Widget card = Card(
       elevation: 0,
       color: tileColor,
@@ -1773,7 +1873,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               SizedBox(height: _isDesktop || _isTablet ? 6 : 8),
               Text(
                 title,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12.5,
@@ -2824,6 +2924,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
 }
 
+/// One labeled Quick Actions block on Home (Job Cards, Fleet, …).
+class _QuickActionSection {
+  final String id;
+  final String label;
+  final List<Map<String, dynamic>> actions;
+  final List<Widget> extraTiles;
+
+  _QuickActionSection({
+    required this.id,
+    required this.label,
+    required this.actions,
+    List<Widget>? extraTiles,
+  }) : extraTiles = extraTiles ?? <Widget>[];
+}
+
 /// Subtle pulse for Home Dept Request badge when there is unread activity.
 class _PulsingBadge extends StatefulWidget {
   final Widget child;
@@ -2925,8 +3040,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
   Widget build(BuildContext context) {
     final isPulsing = widget.pendingCount > _threshold;
 
-    // Gold/amber to match the manager group in Quick Actions; the orange→red
-    // pulse still overrides it when the review backlog is over threshold.
+    // Gold to match Tools Daily Review in Option C Home tint palette.
     const amber = Color(0xFFEAB308);
 
     return AnimatedBuilder(
@@ -2943,7 +3057,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
             children: [
               Card(
                 elevation: isPulsing ? _glowAnim.value * 6 : 0,
-                color: amber.withValues(alpha: 0.12),
+                color: amber.withValues(alpha: 0.18),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                   side: isPulsing
@@ -2953,7 +3067,7 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
                           width: 2.0,
                         )
                       : BorderSide(
-                          color: amber.withValues(alpha: 0.45), width: 0.8),
+                          color: amber.withValues(alpha: 0.55), width: 0.8),
                 ),
                 child: InkWell(
                   onTap: widget.onTap,
@@ -2968,10 +3082,10 @@ class _DailyReviewTileState extends State<_DailyReviewTile>
                           size: widget.iconSize,
                           color: isPulsing ? glowColor : amber,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         Text(
                           'Daily Review',
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,

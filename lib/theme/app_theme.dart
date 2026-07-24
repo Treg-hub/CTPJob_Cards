@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 /// CTP brand primary — terracotta orange (aligned with factory map palette #C25F3A).
 const kBrandOrange = Color(0xFFC25F3A);
 
-/// Ink Factory + Daily Readings quick actions and home banner.
-const kInkModule = Color(0xFF06B6D4);
+/// Ink Factory + Readings Home quick actions and home banner.
+/// Option C high-contrast Home tint (2026-07-25).
+const kInkModule = Color(0xFF22D3EE);
 
-/// Lurgi home quick-action tile colour (same family as [AppColors.lurgiAccent]).
-const kLurgiModule = Color(0xFF5B21B6); // Violet 800 — readable on light tiles + white text
+/// Lurgi Home quick-action tile colour (Option C indigo; hub screens still use
+/// [AppColors.lurgiAccent]).
+const kLurgiModule = Color(0xFF6366F1);
 
 /// Factory toloul tank low-stock alert — matches home tile critical red (priority5).
 const kLowStockRed = Color(0xFFB71C1C);
