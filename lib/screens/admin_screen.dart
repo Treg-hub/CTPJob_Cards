@@ -17,6 +17,7 @@ import '../services/firestore_service.dart';
 import '../models/employee.dart';
 import 'admin_modules_screen.dart';
 import 'admin_tools_screen.dart';
+import 'press_live_access_admin_screen.dart';
 import 'geofence_editor_screen.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
@@ -2680,6 +2681,17 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AdminModulesScreen()),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _hubTile(
+          icon: Icons.precision_manufacturing_outlined,
+          title: 'Press Live access',
+          subtitle: 'Who can view Wifag / Badenia / Aurora snapshot',
+          iconColor: const Color(0xFF0D9488),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PressLiveAccessAdminScreen()),
           ),
         ),
         const SizedBox(height: 8),
