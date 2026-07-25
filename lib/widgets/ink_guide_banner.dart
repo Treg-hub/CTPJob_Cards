@@ -28,7 +28,7 @@ class InkGuideBanner extends ConsumerWidget {
             'Pastel numbers → sent). Tap an order, enter what arrived per line. '
             'After save, finish other floor tasks, then capture the delivery note from '
             'the red Pending delivery note rows. Grey rows are complete. '
-            'Use Receive without order only for true ad-hoc stock.',
+            'Exception: no order only for true ad-hoc stock (skips GRN pack).',
         icon = Icons.local_shipping_outlined;
 
   /// Multi-line confirm against a PO.
@@ -52,7 +52,7 @@ class InkGuideBanner extends ConsumerWidget {
             'Pick the open shipment you are unloading. Packing-list checks apply. '
             'After the load is saved, finish other floor tasks, then capture the '
             'delivery note from the red Pending delivery note rows. Grey rows are complete. '
-            'Receive without shipment only for ad-hoc IBCs (manager still costs later).',
+            'Exception: no shipment only for ad-hoc IBCs (manager still costs later; skips GRN pack).',
         icon = Icons.propane_tank_outlined;
 
   /// IBC receive form.

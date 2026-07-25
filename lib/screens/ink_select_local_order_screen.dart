@@ -89,7 +89,8 @@ class InkSelectLocalOrderScreen extends ConsumerWidget {
                         Text(
                           'Orders appear here after a manager marks them sent on '
                           'CTP Pulse (RFO approved → Pastel numbers → mark sent). '
-                          'Use receive without order only for ad-hoc stock.',
+                          'Use Exception: no order only for true ad-hoc stock '
+                          '(skips GRN pack).',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
@@ -97,7 +98,7 @@ class InkSelectLocalOrderScreen extends ConsumerWidget {
                         FilledButton.icon(
                           onPressed: () => _openReceive(context),
                           icon: const Icon(Icons.edit_note_outlined),
-                          label: const Text('Receive without order'),
+                          label: const Text('Exception: no order'),
                         ),
                       ],
                     ),
@@ -175,7 +176,7 @@ class InkSelectLocalOrderScreen extends ConsumerWidget {
                       OutlinedButton.icon(
                         onPressed: () => _openReceive(context),
                         icon: const Icon(Icons.edit_note_outlined),
-                        label: const Text('Receive without order'),
+                          label: const Text('Exception: no order'),
                       ),
                       if (receivedLoading &&
                           pendingDn.isEmpty &&

@@ -18,6 +18,7 @@ import 'ink_ibc_transfer_screen.dart';
 import 'ink_production_run_screen.dart';
 import 'ink_select_ibc_shipment_screen.dart';
 import 'ink_select_local_order_screen.dart';
+import 'ink_signed_rfo_queue_screen.dart';
 import 'ink_stock_item_detail_screen.dart';
 import 'ink_tank_levels_screen.dart';
 import 'ink_toloul_recovery_screen.dart';
@@ -86,6 +87,16 @@ class InkHomeScreen extends ConsumerWidget {
             if (isManager) ...[
               const SizedBox(height: 12),
               _PulseManageCard(pulseUrl: _pulseInkUrl),
+              const SizedBox(height: 12),
+              _sectionLabel(context, 'Manager'),
+              const SizedBox(height: 8),
+              _ActionGrid(actions: [
+                _Action(
+                  Icons.draw_outlined,
+                  'Signed RFO',
+                  builder: () => const InkSignedRfoQueueScreen(),
+                ),
+              ]),
             ],
             if (readingsStatus != null && !readingsStatus.complete) ...[
               const SizedBox(height: 12),
