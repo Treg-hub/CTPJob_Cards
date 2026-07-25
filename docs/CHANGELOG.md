@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-25 — 2.3.0+190 — Home tiles clearer + Press Live easier to read
+
+### What you will notice
+
+- Home **Quick Actions** are grouped under short headings (Job Cards, Fleet, Ink & Plant, Tools) with clearer colours.
+- **Dept Requests** sits with the other Tools tiles (next to All Dept Req when you have it).
+- **Press Live** is easier to read in dark mode, with the usual orange app bar and clearer status colours.
+
+---
+
 ## 2026-07-24 — 2.3.0+189 — Lurgi air condenser single meter
 
 ### What you will notice

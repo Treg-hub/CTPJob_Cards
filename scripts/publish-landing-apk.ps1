@@ -27,12 +27,24 @@ Write-Host "    App root: $AppRoot"
 if ($BuildApk) {
   Write-Host "==> Building release APK (arm64)..." -ForegroundColor Cyan
   flutter build apk --target-platform android-arm64 --release
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "flutter build apk failed (exit $LASTEXITCODE). Not publishing."
+  }
 }
 
 $apk = Join-Path $AppRoot "build\app\outputs\flutter-apk\app-release.apk"
 if (-not (Test-Path $apk)) {
   Write-Error "APK not found at $apk. Build first or pass -BuildApk."
 }
+
+$apkItem = Get-Item $apk
+$pubspecItem = Get-Item (Join-Path $AppRoot "pubspec.yaml")
+if ($apkItem.LastWriteTimeUtc -lt $pubspecItem.LastWriteTimeUtc.AddMinutes(-1)) {
+  Write-Error ("APK is older than pubspec.yaml ({0:u} < {1:u}). " +
+    "Rebuild with -BuildApk — refusing to publish a stale binary as latest.apk.") -f `
+    $apkItem.LastWriteTimeUtc, $pubspecItem.LastWriteTimeUtc
+}
+Write-Host ("    APK ready ({0:N1} MB, {1:g})" -f ($apkItem.Length / 1MB), $apkItem.LastWriteTime) -ForegroundColor Green
 
 Write-Host "==> Assembling landing-deploy (includes releases/latest.apk)..." -ForegroundColor Cyan
 node build-landing.js
