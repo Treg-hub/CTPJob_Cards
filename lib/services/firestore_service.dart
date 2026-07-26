@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
@@ -16,6 +17,7 @@ import 'resilient_stream.dart';
 import 'sync_service.dart';
 import '../utils/list_load_state.dart';
 import '../utils/persona_audit.dart';
+import '../utils/presence_sync_skip.dart';
 
 /// A job-card list emission that still knows whether it was served from the
 /// local cache. `isFromCache == true` + empty means "the server hasn't
@@ -273,10 +275,27 @@ class FirestoreService {
     }
   }
 
+  /// In-memory last successful **non-presence** sync (static: callers often
+  /// construct a fresh [FirestoreService]).
+  static String? _lastNonPresenceFingerprint;
+  static DateTime? _lastNonPresenceSuccessAt;
+  static String? _lastNonPresenceClockNo;
+
+  static const _prefsPresenceFp = 'presence_non_site_fp';
+  static const _prefsPresenceAt = 'presence_non_site_at_ms';
+  static const _prefsPresenceClock = 'presence_non_site_clock';
+
   /// Updates ONLY the current user's own presence fields via the
   /// `updateEmployeePresence` Cloud Function (the `employees` collection is
   /// locked to admin/CF writes under Wave B). Non-fatal: presence is best-effort
   /// and must never break login, geofencing, or token refresh.
+  ///
+  /// Cost discipline: payloads **without** `isOnSite` (FCM / platform /
+  /// permissions) skip the callable when the fingerprint matches a successful
+  /// sync within [PresenceSyncSkip.ttl]. Payloads that include `isOnSite` always
+  /// call through — geofence transitions and stale-clear corrections must not
+  /// be cached. Pass [force] after login/registration if a non-presence field
+  /// must be re-pushed regardless of TTL.
   Future<void> updateMyPresence({
     String? fcmToken,
     bool? isOnSite,
@@ -287,6 +306,7 @@ class FirestoreService {
     String? clientAppVersion,
     String? clientBuildNumber,
     String? notificationDelivery,
+    bool force = false,
   }) async {
     final payload = <String, dynamic>{};
     if (fcmToken != null) payload['fcmToken'] = fcmToken;
@@ -305,12 +325,107 @@ class FirestoreService {
     // `source` tags the presence change in app_geofence (the CF logs the
     // enter/exit). Only meaningful alongside an isOnSite change.
     if (source != null && isOnSite != null) payload['source'] = source;
+
+    final includesOnSite = payload.containsKey('isOnSite');
+    if (!includesOnSite) {
+      await _hydrateNonPresenceSkipCache();
+      if (PresenceSyncSkip.shouldSkip(
+        payload: payload,
+        force: force,
+        lastFingerprint: _lastNonPresenceFingerprint,
+        lastSuccessAt: _lastNonPresenceSuccessAt,
+      )) {
+        debugPrint(
+          'updateMyPresence skipped (non-presence unchanged, '
+          'age=${DateTime.now().difference(_lastNonPresenceSuccessAt!).inMinutes}m)',
+        );
+        return;
+      }
+    }
+
     try {
       await FirebaseFunctions.instanceFor(region: 'africa-south1')
           .httpsCallable('updateEmployeePresence')
           .call(payload);
+      if (!includesOnSite) {
+        await _rememberNonPresenceSync(PresenceSyncSkip.fingerprint(payload));
+      }
     } catch (e) {
       debugPrint('updateMyPresence failed (non-fatal): $e');
+    }
+  }
+
+  /// Test/helper: clear non-presence skip cache so the next sync always hits CF.
+  static Future<void> clearNonPresenceSyncSkipCache() async {
+    _lastNonPresenceFingerprint = null;
+    _lastNonPresenceSuccessAt = null;
+    _lastNonPresenceClockNo = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsPresenceFp);
+      await prefs.remove(_prefsPresenceAt);
+      await prefs.remove(_prefsPresenceClock);
+    } catch (_) {
+      /* prefs optional */
+    }
+  }
+
+  Future<String?> _resolveClockNo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    try {
+      final token = await user.getIdTokenResult(false);
+      final clock = (token.claims?['clockNum'] as String?)?.trim();
+      if (clock != null && clock.isNotEmpty) return clock;
+    } catch (_) {
+      /* optional */
+    }
+    return user.uid;
+  }
+
+  Future<void> _hydrateNonPresenceSkipCache() async {
+    final clockNo = await _resolveClockNo();
+    if (clockNo == null) return;
+    if (_lastNonPresenceClockNo != null &&
+        _lastNonPresenceClockNo != clockNo) {
+      _lastNonPresenceFingerprint = null;
+      _lastNonPresenceSuccessAt = null;
+      _lastNonPresenceClockNo = null;
+    }
+    if (_lastNonPresenceFingerprint != null &&
+        _lastNonPresenceSuccessAt != null &&
+        _lastNonPresenceClockNo == clockNo) {
+      return;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedClock = prefs.getString(_prefsPresenceClock);
+      final fp = prefs.getString(_prefsPresenceFp);
+      final atMs = prefs.getInt(_prefsPresenceAt);
+      if (savedClock != clockNo || fp == null || atMs == null) return;
+      _lastNonPresenceClockNo = savedClock;
+      _lastNonPresenceFingerprint = fp;
+      _lastNonPresenceSuccessAt =
+          DateTime.fromMillisecondsSinceEpoch(atMs, isUtc: true).toLocal();
+    } catch (_) {
+      /* prefs optional */
+    }
+  }
+
+  Future<void> _rememberNonPresenceSync(String fingerprint) async {
+    final clockNo = await _resolveClockNo();
+    final now = DateTime.now();
+    _lastNonPresenceFingerprint = fingerprint;
+    _lastNonPresenceSuccessAt = now;
+    _lastNonPresenceClockNo = clockNo;
+    if (clockNo == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsPresenceClock, clockNo);
+      await prefs.setString(_prefsPresenceFp, fingerprint);
+      await prefs.setInt(_prefsPresenceAt, now.toUtc().millisecondsSinceEpoch);
+    } catch (_) {
+      /* prefs optional */
     }
   }
 
