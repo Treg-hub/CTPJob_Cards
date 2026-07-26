@@ -341,10 +341,10 @@ void main() async {
         if (!kIsWeb) {
           NotificationService().refreshAndSaveToken(clockNo).catchError((_) {});
         }
-        // Claims (role/department/isAdmin/clockNum) are platform-agnostic and
-        // gate Wave B reads/writes, so refresh on web too. Fire-and-forget;
-        // never blocks startup.
-        AuthClaimsService.refreshClaims(force: true);
+        // Claims gate Wave B reads/writes. Auto-login uses TTL (persisted) —
+        // do not force every process start. Explicit login/registration still
+        // force:true so role changes land immediately after credential entry.
+        AuthClaimsService.refreshClaims();
       }
 
       final permissionsCompleted = prefs.getBool('permissionsCompleted') ?? false;

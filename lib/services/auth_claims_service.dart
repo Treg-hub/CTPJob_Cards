@@ -22,9 +22,10 @@ import 'module_claims.dart';
 /// Always NON-FATAL: any failure (offline, cold start, no employee profile) is
 /// swallowed so it can never block login or app startup.
 ///
-/// Cost discipline: warm resume / hydrate skips the callable when a successful
-/// refresh happened within [_ttl] and the local token already has `clockNum`.
-/// Login, registration, permission-denied recovery, and manual Retry always
+/// Cost discipline: warm resume / hydrate / auto-login skips the callable when
+/// a successful refresh happened within [_ttl] (persisted across process death)
+/// and the local token already has `clockNum`. Login, registration,
+/// permission-denied recovery, manual Retry, and post-APK bootstrap always
 /// pass [force] so role/admin changes still land promptly when needed.
 class AuthClaimsService {
   /// In-flight dedupe: several dead streams recovering at once must trigger
@@ -32,6 +33,10 @@ class AuthClaimsService {
   static Future<void>? _inFlight;
 
   static DateTime? _lastSuccessAt;
+  static String? _lastSuccessUid;
+
+  static const _prefsAtMs = 'claims_refresh_ok_at_ms';
+  static const _prefsUid = 'claims_refresh_ok_uid';
 
   /// Resume/hydrate TTL — long enough to cut Cloud Run spam, short enough that
   /// Pulse role / module-flag edits land within a factory half-shift without
@@ -62,9 +67,11 @@ class AuthClaimsService {
     if (user == null) {
       ModuleClaims.instance.clear();
       _lastSuccessAt = null;
+      _lastSuccessUid = null;
       return;
     }
     try {
+      await _hydrateTtlFromPrefs(user.uid);
       if (!force && await _shouldSkipCallable(user)) {
         final token = await user.getIdTokenResult(false);
         final claims = Map<String, dynamic>.from(token.claims ?? const {});
@@ -86,7 +93,7 @@ class AuthClaimsService {
       final token = await user.getIdTokenResult(true);
       final claims = Map<String, dynamic>.from(token.claims ?? const {});
       ModuleClaims.instance.applyFromTokenClaims(claims);
-      _lastSuccessAt = DateTime.now();
+      await _rememberSuccess(user.uid);
       // Phase 9: keep SharedPreferences admin flag aligned with claim (cold start).
       if (claims.containsKey('isAdmin')) {
         try {
@@ -136,6 +143,7 @@ class AuthClaimsService {
 
   static Future<bool> _shouldSkipCallable(User user) async {
     if (_lastSuccessAt == null) return false;
+    if (_lastSuccessUid != null && _lastSuccessUid != user.uid) return false;
     if (DateTime.now().difference(_lastSuccessAt!) >= _ttl) return false;
     try {
       final token = await user.getIdTokenResult(false);
@@ -146,8 +154,48 @@ class AuthClaimsService {
     }
   }
 
+  static Future<void> _hydrateTtlFromPrefs(String uid) async {
+    if (_lastSuccessAt != null && _lastSuccessUid == uid) return;
+    if (_lastSuccessUid != null && _lastSuccessUid != uid) {
+      _lastSuccessAt = null;
+      _lastSuccessUid = null;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUid = prefs.getString(_prefsUid);
+      final atMs = prefs.getInt(_prefsAtMs);
+      if (savedUid != uid || atMs == null) return;
+      _lastSuccessUid = savedUid;
+      _lastSuccessAt =
+          DateTime.fromMillisecondsSinceEpoch(atMs, isUtc: true).toLocal();
+    } catch (_) {
+      /* prefs optional */
+    }
+  }
+
+  static Future<void> _rememberSuccess(String uid) async {
+    final now = DateTime.now();
+    _lastSuccessAt = now;
+    _lastSuccessUid = uid;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsUid, uid);
+      await prefs.setInt(_prefsAtMs, now.toUtc().millisecondsSinceEpoch);
+    } catch (_) {
+      /* prefs optional */
+    }
+  }
+
   /// Test/helper: clear TTL so the next [refreshClaims] always hits the CF.
-  static void debugResetTtl() {
+  static Future<void> debugResetTtl() async {
     _lastSuccessAt = null;
+    _lastSuccessUid = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsAtMs);
+      await prefs.remove(_prefsUid);
+    } catch (_) {
+      /* prefs optional */
+    }
   }
 }
