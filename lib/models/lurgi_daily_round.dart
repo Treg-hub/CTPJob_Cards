@@ -51,6 +51,10 @@ class LurgiDailyRound {
     this.tanksAt,
     this.tanksByClock,
     this.tanksByName,
+    this.overheadTankLitres,
+    this.overheadTankAt,
+    this.overheadTankByClock,
+    this.overheadTankByName,
     this.meterBaselineDateKey,
     this.meterSpanDays,
     this.meterSpanComment,
@@ -120,6 +124,12 @@ class LurgiDailyRound {
   final String? tanksByClock;
   final String? tanksByName;
 
+  /// Month-end / count dip — absolute litres (separate from daily Tank 1–3 walk).
+  final double? overheadTankLitres;
+  final DateTime? overheadTankAt;
+  final String? overheadTankByClock;
+  final String? overheadTankByName;
+
   // ── Multi-day baseline (when previous capture ≠ yesterday) ───────────────
   final String? meterBaselineDateKey;
   final int? meterSpanDays;
@@ -156,6 +166,20 @@ class LurgiDailyRound {
       tank2Direction != null &&
       tank3Litres != null &&
       tank3Direction != null;
+
+  bool get overheadTankComplete => overheadTankLitres != null;
+
+  /// Tank 1–3 + overhead all present (month-end Lurgi sum ready).
+  bool get toloulDipsCompleteForCount =>
+      tank1Litres != null &&
+      tank2Litres != null &&
+      tank3Litres != null &&
+      overheadTankLitres != null;
+
+  double? get toloulLurgiSumForCount {
+    if (!toloulDipsCompleteForCount) return null;
+    return tank1Litres! + tank2Litres! + tank3Litres! + overheadTankLitres!;
+  }
 
   /// Morning-round daily sections (excludes ink Daily Readings).
   bool get morningComplete =>
@@ -226,6 +250,10 @@ class LurgiDailyRound {
       tanksAt: _ts(d['tanks_at']),
       tanksByClock: d['tanks_by_clock'] as String?,
       tanksByName: d['tanks_by_name'] as String?,
+      overheadTankLitres: _num(d['overhead_tank_litres']),
+      overheadTankAt: _ts(d['overhead_tank_at']),
+      overheadTankByClock: d['overhead_tank_by_clock'] as String?,
+      overheadTankByName: d['overhead_tank_by_name'] as String?,
       meterBaselineDateKey: d['meter_baseline_date_key'] as String?,
       meterSpanDays: (d['meter_span_days'] as num?)?.toInt(),
       meterSpanComment: d['meter_span_comment'] as String?,
@@ -249,6 +277,7 @@ class LurgiDailyRound {
     required bool includeAir,
     required bool includeGeyser,
     required bool includeTanks,
+    bool includeOverheadTank = false,
     required String actorClockNo,
     required String actorName,
     required DateTime now,
@@ -314,6 +343,12 @@ class LurgiDailyRound {
       m['tanks_by_clock'] = actorClockNo;
       m['tanks_by_name'] = actorName;
     }
+    if (includeOverheadTank) {
+      m['overhead_tank_litres'] = overheadTankLitres;
+      m['overhead_tank_at'] = Timestamp.fromDate(now);
+      m['overhead_tank_by_clock'] = actorClockNo;
+      m['overhead_tank_by_name'] = actorName;
+    }
     if (includeSpan) {
       if (meterBaselineDateKey != null) {
         m['meter_baseline_date_key'] = meterBaselineDateKey;
@@ -377,6 +412,7 @@ class LurgiDailyRound {
     String? tank2Direction,
     double? tank3Litres,
     String? tank3Direction,
+    double? overheadTankLitres,
     String? meterBaselineDateKey,
     int? meterSpanDays,
     String? meterSpanComment,
@@ -429,6 +465,10 @@ class LurgiDailyRound {
       tanksAt: tanksAt,
       tanksByClock: tanksByClock,
       tanksByName: tanksByName,
+      overheadTankLitres: overheadTankLitres ?? this.overheadTankLitres,
+      overheadTankAt: overheadTankAt,
+      overheadTankByClock: overheadTankByClock,
+      overheadTankByName: overheadTankByName,
       meterBaselineDateKey: meterBaselineDateKey ?? this.meterBaselineDateKey,
       meterSpanDays: meterSpanDays ?? this.meterSpanDays,
       meterSpanComment: meterSpanComment ?? this.meterSpanComment,

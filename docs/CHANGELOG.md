@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-25 — 2.3.0+191 — Ink signed RFO + Lurgi overhead tank
+
+### What you will notice
+
+- **Ink Factory** has a **Signed RFO** queue: capture and attach signed return-for-order paperwork against open orders.
+- Guide banners on receive / IBC / local order screens point you to the next step more clearly.
+- **Lurgi** adds an **Overhead tank** screen to record overhead tank levels during the daily round.
+
+---
+
 ## 2026-07-25 — 2.3.0+190 — Home tiles clearer + Press Live easier to read
 
 ### What you will notice

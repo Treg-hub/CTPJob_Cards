@@ -15,6 +15,7 @@ import 'ink_daily_readings_screen.dart';
 import 'lurgi_chemicals_screen.dart';
 import 'lurgi_ink_factory_recovery_screen.dart';
 import 'lurgi_operator_guide_screen.dart';
+import 'lurgi_overhead_tank_screen.dart';
 import 'lurgi_period_history_screen.dart';
 import 'lurgi_recycling_screen.dart';
 import 'lurgi_section_form.dart';
@@ -71,6 +72,7 @@ class LurgiHomeScreen extends ConsumerWidget {
               message:
                   'Walk the plant with the five Daily log tiles (Gas → Water → '
                   'Air → Geyser → Tanks). Save each area before the next. '
+                  'Overhead Tank is a separate dip for month-end count. '
                   'Daily Readings can be finished later the same day (add missing). '
                   'Open Operator guide anytime for the full checklist.',
             ),
@@ -165,6 +167,13 @@ class LurgiHomeScreen extends ConsumerWidget {
                 badgeOk: round?.tanksComplete ?? false,
                 builder: () =>
                     const LurgiSectionFormScreen(section: LurgiSection.tanks),
+              ),
+              _Action(
+                Icons.water_drop_outlined,
+                'Overhead Tank',
+                badge: (round?.overheadTankComplete ?? false) ? 'Done ✓' : 'Todo',
+                badgeOk: round?.overheadTankComplete ?? false,
+                builder: () => const LurgiOverheadTankScreen(),
               ),
             ]),
             const SizedBox(height: 20),

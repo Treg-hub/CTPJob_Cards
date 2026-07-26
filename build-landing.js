@@ -3,31 +3,21 @@
 //   landing/index.html         → landing-deploy/index.html
 //   docs/**                    → landing-deploy/docs/**       (only the cleaned, employee-safe set)
 //   assets/images/logo.png     → landing-deploy/assets/images/logo.png
-//   build/.../app-release.apk  → landing-deploy/releases/latest.apk  (if present)
 //
-// IMPORTANT: this script wipes landing-deploy/ then rebuilds it. The APK is
-// copied at the END if a release build exists. Order for a full release:
-//   1. flutter build apk --target-platform android-arm64 --release
-//   2. node build-landing.js
-//   3. firebase deploy --only hosting:landing --project ctp-job-cards
+// APKs are NOT hosted here (Hosting bandwidth). Publish via:
+//   pwsh .\scripts\publish-landing-apk.ps1
+// which uploads to Cloud Storage and deploys this thin site + redirects.
 //
-// Official download URL (also Admin Shared download URL for in-app updates):
-//   https://ctp-job-cards-landing.web.app/releases/latest.apk
+// Canonical Shared download URL (overwrite in place each ship):
+//   https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media
+// Legacy Hosting paths /releases/latest.apk and /releases/pilot.apk 302 → Storage
+// (configured in firebase.json hosting redirects).
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = __dirname;
 const OUT  = path.join(ROOT, 'landing-deploy');
-const APK_SRC = path.join(
-  ROOT,
-  'build',
-  'app',
-  'outputs',
-  'flutter-apk',
-  'app-release.apk',
-);
-const APK_DEST = path.join(OUT, 'releases', 'latest.apk');
 
 function rmrf(p) {
   if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
@@ -99,29 +89,14 @@ function countFiles(p) {
   return n;
 }
 
-// ─── Official APK (optional — only if a release APK was built) ─────────────
-let apkCopied = false;
-if (fs.existsSync(APK_SRC)) {
-  copyFile(APK_SRC, APK_DEST);
-  const sizeMb = (fs.statSync(APK_DEST).size / (1024 * 1024)).toFixed(1);
-  apkCopied = true;
-  console.log(`  releases/latest.apk ← app-release.apk (${sizeMb} MB)`);
-} else {
-  console.warn(
-    '  releases/latest.apk  SKIPPED — no build/app/outputs/flutter-apk/app-release.apk',
-  );
-  console.warn(
-    '    Build the APK first, then re-run this script before deploy, or copy manually.',
-  );
-}
-
-console.log(`landing-deploy/ assembled — ${countFiles(OUT)} files`);
+console.log(`landing-deploy/ assembled — ${countFiles(OUT)} files (no APK — Storage)`);
 console.log(`  index.html       → 1`);
 console.log(`  assets/          → ${countFiles(path.join(OUT, 'assets'))}`);
 console.log(`  docs/            → ${countFiles(path.join(OUT, 'docs'))}`);
-console.log(`  releases/apk     → ${apkCopied ? 'yes' : 'NO'}`);
 console.log('');
-console.log('Next: firebase deploy --only hosting:landing --project ctp-job-cards');
+console.log('APK upload:  pwsh .\\scripts\\upload-release-apk.ps1 -Name latest');
+console.log('Full ship:   pwsh .\\scripts\\publish-landing-apk.ps1');
+console.log('Deploy page: firebase deploy --only hosting:landing --project ctp-job-cards');
 console.log(
-  'URL:  https://ctp-job-cards-landing.web.app/releases/latest.apk',
+  'URL:  https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media',
 );

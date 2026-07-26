@@ -1,28 +1,34 @@
-# Assemble landing site + official APK and deploy to Firebase Hosting (landing).
+# Assemble landing site + upload factory APK to Cloud Storage, then deploy Hosting
+# (thin landing page + redirects from legacy /releases/*.apk paths).
+#
 # Prerequisites: release APK already built (or pass -BuildApk).
+# Requires: gcloud auth for project ctp-job-cards; Storage rules deployed
+#   (releases/** public read) from monorepo /firebase.
 #
-# Usage (from repo anywhere):
-#   pwsh mobile/CTPJob_Cards/scripts/publish-landing-apk.ps1
-#   pwsh mobile/CTPJob_Cards/scripts/publish-landing-apk.ps1 -BuildApk
+# Usage (from mobile/CTPJob_Cards):
+#   pwsh .\scripts\publish-landing-apk.ps1
+#   pwsh .\scripts\publish-landing-apk.ps1 -BuildApk
+#   pwsh .\scripts\publish-landing-apk.ps1 -SkipHosting
 #
-# After deploy, set Admin → Shared download URL to:
-#   https://ctp-job-cards-landing.web.app/releases/latest.apk
+# After upload, set Admin → Shared download URL to the Storage URL printed below
+# (same URL every release — object is overwritten in place).
 
 param(
   [switch]$BuildApk,
-  [switch]$SkipDeploy
+  [switch]$SkipDeploy,
+  [switch]$SkipHosting,
+  [switch]$SkipUpload
 )
 
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-if (-not (Test-Path (Join-Path $PSScriptRoot "..\pubspec.yaml"))) {
-  $Root = Split-Path -Parent $PSScriptRoot
-}
 Set-Location (Join-Path $PSScriptRoot "..")
 $AppRoot = Get-Location
 
-Write-Host "==> CTP Job Cards — publish landing + latest.apk" -ForegroundColor Cyan
+. (Join-Path $PSScriptRoot "apk-release-urls.ps1")
+
+Write-Host "==> CTP Job Cards — publish Storage latest.apk + landing" -ForegroundColor Cyan
 Write-Host "    App root: $AppRoot"
+Write-Host "    Canonical URL: $script:LatestApkUrl"
 
 if ($BuildApk) {
   Write-Host "==> Building release APK (arm64)..." -ForegroundColor Cyan
@@ -46,28 +52,31 @@ if ($apkItem.LastWriteTimeUtc -lt $pubspecItem.LastWriteTimeUtc.AddMinutes(-1)) 
 }
 Write-Host ("    APK ready ({0:N1} MB, {1:g})" -f ($apkItem.Length / 1MB), $apkItem.LastWriteTime) -ForegroundColor Green
 
-Write-Host "==> Assembling landing-deploy (includes releases/latest.apk)..." -ForegroundColor Cyan
-node build-landing.js
-
-$dest = Join-Path $AppRoot "landing-deploy\releases\latest.apk"
-if (-not (Test-Path $dest)) {
-  Write-Error "latest.apk was not copied into landing-deploy. Check build-landing.js output."
+if (-not $SkipUpload) {
+  & (Join-Path $PSScriptRoot "upload-release-apk.ps1") -Name latest -ApkPath $apk
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "Storage upload failed."
+  }
+} else {
+  Write-Host "==> SkipUpload — not uploading APK to Storage" -ForegroundColor Yellow
 }
 
-$len = (Get-Item $dest).Length
-Write-Host ("    latest.apk size: {0:N1} MB" -f ($len / 1MB)) -ForegroundColor Green
+Write-Host "==> Assembling landing-deploy (HTML/docs only — APK is on Storage)..." -ForegroundColor Cyan
+node build-landing.js
 
-if ($SkipDeploy) {
-  Write-Host "==> SkipDeploy set — not deploying. Run:" -ForegroundColor Yellow
+if ($SkipDeploy -or $SkipHosting) {
+  Write-Host "==> Skip hosting deploy. When ready:" -ForegroundColor Yellow
   Write-Host "    firebase deploy --only hosting:landing --project ctp-job-cards"
   exit 0
 }
 
-Write-Host "==> Deploying hosting:landing ..." -ForegroundColor Cyan
+Write-Host "==> Deploying hosting:landing (page + legacy APK redirects)..." -ForegroundColor Cyan
 firebase deploy --only hosting:landing --project ctp-job-cards
 
 Write-Host ""
 Write-Host "Done." -ForegroundColor Green
-Write-Host "Download / in-app URL:"
-Write-Host "  https://ctp-job-cards-landing.web.app/releases/latest.apk"
-Write-Host "Admin: set Shared download URL to that link; bump version/build and Save publish."
+Write-Host "Shared download URL / landing / in-app (set once in Admin):"
+Write-Host "  $script:LatestApkUrl"
+Write-Host "Legacy Hosting path still redirects (bookmarks/QR):"
+Write-Host "  $script:LegacyLatestHostingUrl"
+Write-Host "Admin: Shared download URL = Storage URL above; bump version/build and Save publish."

@@ -159,38 +159,38 @@ Use this every time you ship a Job Cards Android build.
 3. Confirm `CHANGELOG.md` is listed under Flutter assets (already wired) so What’s new ships in the APK.
 4. Note anything that needs **force**, **soft**, **pilot-only**, or **kill-switch**.
 
-### B. Build & host (official landing APK)
+### B. Build & upload (official Storage APK)
 
 **Canonical download URL** (first install + in-app update):
 
 ```text
-https://ctp-job-cards-landing.web.app/releases/latest.apk
+https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media
 ```
 
-Landing page: one **Download app** button + QR → that file. Auth is **in the app** (Create account / Login), not App Distribution.
+Landing page: one **Download app** button + QR → that Storage URL. Auth is **in the app** (Create account / Login), not App Distribution. Legacy Hosting `/releases/latest.apk` **302-redirects** to Storage.
 
 5. Build the **release APK** (same signing key as previous installs):
    ```powershell
    cd mobile\CTPJob_Cards
    flutter build apk --target-platform android-arm64 --release
    ```
-6. Assemble landing + copy APK + deploy Hosting:
+6. Upload to Storage + deploy thin landing (redirects):
    ```powershell
    # One-shot (from mobile/CTPJob_Cards):
    pwsh .\scripts\publish-landing-apk.ps1
    # Or manually:
+   pwsh .\scripts\upload-release-apk.ps1 -Name latest
    node build-landing.js
-   # (build-landing copies app-release.apk → landing-deploy/releases/latest.apk if present)
    firebase deploy --only hosting:landing --project ctp-job-cards
    ```
-   **Order matters:** `build-landing.js` wipes `landing-deploy/`; the APK is copied at the end of that script only if the release APK already exists.
-7. Confirm the URL downloads ~45–50 MB in a browser (not 404 / not App Distribution login).
+   APKs are **not** copied into `landing-deploy/` (Hosting bandwidth). Storage object is overwritten in place.
+7. Confirm the Storage URL downloads ~45–50 MB in a browser (not 404 / not App Distribution login).
 8. Optional: SHA-256 of the APK for Admin integrity check. Install that APK once on a test phone.
 
 ### C. Publish in Admin (App releases)
 
 9. Set **Shared download URL** to  
-   `https://ctp-job-cards-landing.web.app/releases/latest.apk`  
+   `https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media`  
    (same every release if you keep overwriting `latest.apk`).
 10. Configure the right **channel**:
     - Soft factory → Default, Force **off**

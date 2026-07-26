@@ -217,7 +217,7 @@ class _InkReceiveRawMaterialScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_againstPo ? 'Confirm receipt' : 'Receive without order'),
+        title: Text(_againstPo ? 'Confirm receipt' : 'Exception: receive without order'),
       ),
       body: _againstPo
           ? _buildAgainstPo(context, df, qtyFmt)

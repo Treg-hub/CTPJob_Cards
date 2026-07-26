@@ -1,23 +1,20 @@
-# Publish a PILOT APK alongside factory latest.apk on the landing Hosting site.
+# Publish a PILOT APK to Cloud Storage (stable pilot.apk object).
+# Factory latest.apk on Storage is left alone unless -AlsoLatest.
 #
 # Pilot URL (Departments / People channel APK URL):
-#   https://ctp-job-cards-landing.web.app/releases/pilot.apk
-#
-# Factory / landing Download button stays:
-#   https://ctp-job-cards-landing.web.app/releases/latest.apk
+#   (see apk-release-urls.ps1 — Storage, not Hosting)
 #
 # Usage:
 #   pwsh .\scripts\publish-landing-pilot-apk.ps1
 #   pwsh .\scripts\publish-landing-pilot-apk.ps1 -BuildApk
+#   pwsh .\scripts\publish-landing-pilot-apk.ps1 -AlsoLatest
 #   pwsh .\scripts\publish-landing-pilot-apk.ps1 -SkipDeploy
-#
-# Critical: build-landing.js wipes landing-deploy/. This script re-adds pilot.apk
-# and restores latest.apk from a local backup or the live Hosting file when possible.
 
 param(
   [switch]$BuildApk,
   [switch]$SkipDeploy,
-  # Also overwrite latest.apk with this build (NOT for Ink-only pilot).
+  [switch]$SkipHosting,
+  # Also overwrite Storage latest.apk with this build (NOT for Ink-only pilot).
   [switch]$AlsoLatest
 )
 
@@ -25,18 +22,13 @@ $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 $AppRoot = Get-Location
 
-$PilotUrl = "https://ctp-job-cards-landing.web.app/releases/pilot.apk"
-$LatestUrl = "https://ctp-job-cards-landing.web.app/releases/latest.apk"
-$ReleasesDir = Join-Path $AppRoot "landing-deploy\releases"
-$PilotDest = Join-Path $ReleasesDir "pilot.apk"
-$LatestDest = Join-Path $ReleasesDir "latest.apk"
-$ApkSrc = Join-Path $AppRoot "build\app\outputs\flutter-apk\app-release.apk"
-$BackupDir = Join-Path $AppRoot "landing-deploy-apk-backup"
-$LatestBackup = Join-Path $BackupDir "latest.apk"
+. (Join-Path $PSScriptRoot "apk-release-urls.ps1")
 
-Write-Host "==> CTP Job Cards — publish landing pilot.apk" -ForegroundColor Cyan
+$ApkSrc = Join-Path $AppRoot "build\app\outputs\flutter-apk\app-release.apk"
+
+Write-Host "==> CTP Job Cards — publish Storage pilot.apk" -ForegroundColor Cyan
 Write-Host "    App root: $AppRoot"
-Write-Host "    Pilot URL: $PilotUrl"
+Write-Host "    Pilot URL: $script:PilotApkUrl"
 
 if ($BuildApk) {
   Write-Host "==> Building release APK (arm64)..." -ForegroundColor Cyan
@@ -50,7 +42,6 @@ if (-not (Test-Path $ApkSrc)) {
   Write-Error "APK not found at $ApkSrc. Build first or pass -BuildApk."
 }
 
-# Guard: never host a binary older than the version bump / changelog edit.
 $apkItem = Get-Item $ApkSrc
 $pubspecItem = Get-Item (Join-Path $AppRoot "pubspec.yaml")
 if ($apkItem.LastWriteTimeUtc -lt $pubspecItem.LastWriteTimeUtc.AddMinutes(-1)) {
@@ -60,44 +51,25 @@ if ($apkItem.LastWriteTimeUtc -lt $pubspecItem.LastWriteTimeUtc.AddMinutes(-1)) 
 }
 Write-Host ("    APK ready ({0:N1} MB, {1:g})" -f ($apkItem.Length / 1MB), $apkItem.LastWriteTime) -ForegroundColor Green
 
-# Preserve factory latest before wipe
-New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
-if (Test-Path $LatestDest) {
-  Copy-Item $LatestDest $LatestBackup -Force
-  Write-Host "    Backed up local latest.apk" -ForegroundColor DarkGray
-} elseif (-not (Test-Path $LatestBackup)) {
-  Write-Host "    Trying to download live latest.apk for preserve..." -ForegroundColor DarkGray
-  try {
-    Invoke-WebRequest -Uri $LatestUrl -OutFile $LatestBackup -UseBasicParsing
-    if ((Get-Item $LatestBackup).Length -lt 1MB) {
-      Remove-Item $LatestBackup -Force -ErrorAction SilentlyContinue
-    }
-  } catch {
-    Write-Host "    (Could not download live latest — deploy may drop factory APK until you re-publish latest.)" -ForegroundColor Yellow
+& (Join-Path $PSScriptRoot "upload-release-apk.ps1") -Name pilot -ApkPath $ApkSrc
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "pilot.apk Storage upload failed."
+}
+
+if ($AlsoLatest) {
+  Write-Host "==> Also uploading as latest.apk (-AlsoLatest)" -ForegroundColor Yellow
+  & (Join-Path $PSScriptRoot "upload-release-apk.ps1") -Name latest -ApkPath $ApkSrc
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "latest.apk Storage upload failed."
   }
 }
 
-Write-Host "==> Assembling landing-deploy..." -ForegroundColor Cyan
+# Landing page rarely changes on pilot-only ships; still refresh redirects/docs if needed.
+Write-Host "==> Assembling landing-deploy (HTML/docs only)..." -ForegroundColor Cyan
 node build-landing.js
 
-New-Item -ItemType Directory -Force -Path $ReleasesDir | Out-Null
-
-# Restore factory latest unless user wants this build to also be latest
-if ($AlsoLatest) {
-  Copy-Item $ApkSrc $LatestDest -Force
-  Write-Host "    Also wrote latest.apk from this build (-AlsoLatest)" -ForegroundColor Yellow
-} elseif (Test-Path $LatestBackup) {
-  Copy-Item $LatestBackup $LatestDest -Force
-  Write-Host ("    Restored latest.apk ({0:N1} MB)" -f ((Get-Item $LatestDest).Length / 1MB)) -ForegroundColor Green
-} else {
-  Write-Host "    WARNING: no latest.apk restored — landing Download may 404 until you run publish-landing-apk.ps1" -ForegroundColor Yellow
-}
-
-Copy-Item $ApkSrc $PilotDest -Force
-Write-Host ("    Wrote pilot.apk ({0:N1} MB)" -f ((Get-Item $PilotDest).Length / 1MB)) -ForegroundColor Green
-
-if ($SkipDeploy) {
-  Write-Host "==> SkipDeploy — not deploying." -ForegroundColor Yellow
+if ($SkipDeploy -or $SkipHosting) {
+  Write-Host "==> Skip hosting deploy." -ForegroundColor Yellow
   Write-Host "    firebase deploy --only hosting:landing --project ctp-job-cards"
   exit 0
 }
@@ -108,12 +80,12 @@ firebase deploy --only hosting:landing --project ctp-job-cards
 Write-Host ""
 Write-Host "Done." -ForegroundColor Green
 Write-Host "Pilot URL (Departments / People channel APK URL):"
-Write-Host "  $PilotUrl"
-Write-Host "Factory Shared / Default URL (keep on this unless -AlsoLatest):"
-Write-Host "  $LatestUrl"
+Write-Host "  $script:PilotApkUrl"
+Write-Host "Factory Shared / Default URL:"
+Write-Host "  $script:LatestApkUrl"
 Write-Host ""
 Write-Host "Admin checklist:"
-Write-Host "  1. Shared download URL = latest.apk URL"
+Write-Host "  1. Shared download URL = latest Storage URL (set once)"
 Write-Host "  2. Default channel = factory version/build (lower than pilot)"
 Write-Host "  3. Departments or People: enable, select audience, version/build of THIS pilot,"
-Write-Host "     Channel APK URL = pilot.apk URL, Force as needed → Save publish"
+Write-Host "     Channel APK URL = pilot Storage URL, Force as needed → Save publish"

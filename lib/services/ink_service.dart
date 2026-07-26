@@ -1156,6 +1156,21 @@ class InkService {
         return list;
       });
 
+  /// POs awaiting signed RFO photo and/or Pastel numbers (import + local).
+  Stream<List<InkPurchaseOrder>> watchSignedRfoQueue() => _db
+      .collection(Collections.inkPurchaseOrders)
+      .where('status', whereIn: ['rfo_issued', 'rfo_approved'])
+      .snapshots()
+      .map((s) {
+        final list = s.docs.map(InkPurchaseOrder.fromFirestore).toList();
+        list.sort((a, b) => b.pulseRef.compareTo(a.pulseRef));
+        return list;
+      });
+
+  @Deprecated('Use watchSignedRfoQueue')
+  Stream<List<InkPurchaseOrder>> watchImportSignedRfoQueue() =>
+      watchSignedRfoQueue();
+
   static const _receivedThisPeriodFetchLimit = 40;
 
   /// Fulfilled local POs whose fulfill/update falls in the open count period.
@@ -1482,6 +1497,85 @@ class InkService {
       'content_type': safeType,
       'captured_by': capturedBy,
       'source': 'mobile',
+    });
+  }
+
+  /// Upload signed board RFO image and advance PO to `rfo_approved` (CF).
+  Future<void> attachSignedRfo({
+    required String orderId,
+    required String localFilePath,
+    required String contentType,
+    required String capturedBy,
+  }) async {
+    _guardWrite();
+    final id = orderId.trim();
+    if (id.isEmpty) throw ArgumentError('orderId is required');
+    final file = File(localFilePath);
+    if (!file.existsSync()) {
+      throw StateError(
+        'Photo was cleaned up before upload — take or pick it again.',
+      );
+    }
+    final online =
+        await ConnectivityService().isOnline().catchError((_) => false);
+    if (!online) {
+      throw StateError(
+        'No connection — signed RFO upload needs to be online. '
+        'Reconnect and try again.',
+      );
+    }
+
+    final ext = contentType.contains('pdf')
+        ? '.pdf'
+        : contentType.contains('png')
+            ? '.png'
+            : '.jpg';
+    final safeType = contentType.isNotEmpty
+        ? contentType
+        : (ext == '.pdf' ? 'application/pdf' : 'image/jpeg');
+    final storagePath =
+        'ink/orders/$id/signed-rfo-${DateTime.now().millisecondsSinceEpoch}$ext';
+
+    await FirebaseStorage.instance.ref(storagePath).putFile(
+          file,
+          SettableMetadata(contentType: safeType),
+        );
+
+    final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('attachInkSignedRfo');
+    await callable.call<Map<String, dynamic>>({
+      'order_id': id,
+      'storage_path': storagePath,
+      'content_type': safeType,
+      'captured_by': capturedBy,
+      'source': 'mobile',
+    });
+  }
+
+  /// Save Pastel RFO # + order # and advance to `order_numbered` (CF).
+  Future<void> completePastelNumbers({
+    required String orderId,
+    required String pastelRfoNumber,
+    required String erpOrderNumber,
+    required String enteredBy,
+  }) async {
+    _guardWrite();
+    final id = orderId.trim();
+    if (id.isEmpty) throw ArgumentError('orderId is required');
+    final online =
+        await ConnectivityService().isOnline().catchError((_) => false);
+    if (!online) {
+      throw StateError(
+        'No connection — Pastel numbers need to be saved online.',
+      );
+    }
+    final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
+        .httpsCallable('completeInkPastelNumbers');
+    await callable.call<Map<String, dynamic>>({
+      'order_id': id,
+      'pastel_rfo_number': pastelRfoNumber.trim(),
+      'erp_order_number': erpOrderNumber.trim(),
+      'entered_by': enteredBy,
     });
   }
 

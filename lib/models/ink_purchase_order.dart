@@ -2,11 +2,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'ink_delivery_note.dart';
 
-/// Open PO statuses that still have inbound qty (mirrors Pulse inboundPipeline).
+/// Open / workflow statuses used on mobile (receive + signed RFO).
 enum InkPurchaseOrderStatus {
+  proposed('proposed'),
+  rfoIssued('rfo_issued'),
+  rfoApproved('rfo_approved'),
+  orderNumbered('order_numbered'),
   sent('sent'),
   partiallyFulfilled('partially_fulfilled'),
-  fulfilled('fulfilled');
+  fulfilled('fulfilled'),
+  cancelled('cancelled');
 
   const InkPurchaseOrderStatus(this.value);
   final String value;
@@ -16,6 +21,16 @@ enum InkPurchaseOrderStatus {
         (s) => s.value == v,
         orElse: () => InkPurchaseOrderStatus.sent,
       );
+
+  bool get isReceiveOpen =>
+      this == InkPurchaseOrderStatus.sent ||
+      this == InkPurchaseOrderStatus.partiallyFulfilled;
+
+  bool get needsSignedRfoCapture =>
+      this == InkPurchaseOrderStatus.rfoIssued;
+
+  bool get needsPastelNumbers =>
+      this == InkPurchaseOrderStatus.rfoApproved;
 }
 
 /// Frozen at create on Pulse — import (Siegwerk) vs local reorder loop.
@@ -85,6 +100,8 @@ class InkPurchaseOrder {
     this.pastelRfoNumber,
     this.estimatedArrival,
     this.deliveryNote,
+    this.signedRfoPdfPath,
+    this.rfoPdfPath,
     this.updatedAt,
     this.finalizedAt,
   });
@@ -100,6 +117,8 @@ class InkPurchaseOrder {
   final String? pastelRfoNumber;
   final DateTime? estimatedArrival;
   final InkDeliveryNote? deliveryNote;
+  final String? signedRfoPdfPath;
+  final String? rfoPdfPath;
   final DateTime? updatedAt;
   final DateTime? finalizedAt;
 
@@ -196,6 +215,8 @@ class InkPurchaseOrder {
       pastelRfoNumber: d['pastel_rfo_number'] as String?,
       estimatedArrival: eta,
       deliveryNote: InkDeliveryNote.fromMap(d['delivery_note']),
+      signedRfoPdfPath: d['signed_rfo_pdf_path'] as String?,
+      rfoPdfPath: d['rfo_pdf_path'] as String?,
       updatedAt: asDate(d['updated_at']),
       finalizedAt: asDate(d['finalized_at']),
     );

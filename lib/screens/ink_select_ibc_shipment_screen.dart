@@ -84,8 +84,8 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Receive without a shipment if stock arrived ad hoc, '
-                          'or ask a manager to create the shipment in CTP Pulse.',
+                          'Receive without a shipment only for ad-hoc stock '
+                          '(no GRN pack). Prefer a Pulse shipment when possible.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),
@@ -93,7 +93,7 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                         FilledButton.icon(
                           onPressed: () => _openReceive(context),
                           icon: const Icon(Icons.edit_note_outlined),
-                          label: const Text('Receive without shipment'),
+                          label: const Text('Exception: no shipment'),
                         ),
                       ],
                     ),
@@ -153,7 +153,7 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                       OutlinedButton.icon(
                         onPressed: () => _openReceive(context),
                         icon: const Icon(Icons.edit_note_outlined),
-                        label: const Text('Receive without shipment'),
+                          label: const Text('Exception: no shipment'),
                       ),
                       if (receivedLoading &&
                           pendingDn.isEmpty &&

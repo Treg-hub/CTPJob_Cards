@@ -158,6 +158,15 @@ final inkOpenPurchaseOrdersProvider = StreamProvider<List<InkPurchaseOrder>>(
   (ref) => ref.watch(inkServiceProvider).watchOpenPurchaseOrders(),
 );
 
+/// POs needing signed RFO photo and/or Pastel numbers (Ink managers; both tracks).
+final inkSignedRfoQueueProvider =
+    StreamProvider.autoDispose<List<InkPurchaseOrder>>(
+  (ref) => ref.watch(inkServiceProvider).watchSignedRfoQueue(),
+);
+
+@Deprecated('Use inkSignedRfoQueueProvider')
+final inkImportSignedRfoQueueProvider = inkSignedRfoQueueProvider;
+
 /// Open local-track POs still awaiting receipt (Receive Local list).
 final inkOpenLocalPurchaseOrdersProvider =
     Provider<AsyncValue<List<InkPurchaseOrder>>>((ref) {

@@ -148,6 +148,10 @@ class LurgiService {
       tanksAt: round.tanksAt,
       tanksByClock: round.tanksByClock,
       tanksByName: round.tanksByName,
+      overheadTankLitres: round.overheadTankLitres,
+      overheadTankAt: round.overheadTankAt,
+      overheadTankByClock: round.overheadTankByClock,
+      overheadTankByName: round.overheadTankByName,
       meterBaselineDateKey: round.meterBaselineDateKey,
       meterSpanDays: round.meterSpanDays,
       meterSpanComment: round.meterSpanComment,
@@ -175,6 +179,41 @@ class LurgiService {
       data['recorded_at'] = Timestamp.fromDate(effectiveAt);
     }
     await _roundRef(round.dateKey).set(data, SetOptions(merge: true));
+  }
+
+  /// Month-end overhead tank dip (absolute litres) for the calendar day.
+  Future<void> saveOverheadTank({
+    required String dateKey,
+    required double litres,
+    required String actorClockNo,
+    required String actorName,
+    DateTime? effectiveAt,
+  }) async {
+    _guardWrite();
+    final now = effectiveAt ?? DateTime.now();
+    final existing = await fetchRound(dateKey);
+    final round = LurgiDailyRound(
+      dateKey: dateKey,
+      recordedAt: existing?.recordedAt,
+      overheadTankLitres: litres,
+    );
+    final data = round.toMergeMap(
+      includeUtilities: false,
+      includeWater: false,
+      includeAir: false,
+      includeGeyser: false,
+      includeTanks: false,
+      includeOverheadTank: true,
+      actorClockNo: actorClockNo,
+      actorName: actorName,
+      now: now,
+    );
+    if (existing?.recordedAt != null) {
+      data.remove('recorded_at');
+    } else if (effectiveAt != null) {
+      data['recorded_at'] = Timestamp.fromDate(effectiveAt);
+    }
+    await _roundRef(dateKey).set(data, SetOptions(merge: true));
   }
 
   /// Mark chemicals / recycling as intentionally none for [dateKey].
