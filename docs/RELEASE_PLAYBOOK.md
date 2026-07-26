@@ -1,12 +1,12 @@
 # Job Cards Android — Release Playbook
 
 **Who this is for:** You (or an agent) shipping a new CTP Job Cards APK.  
-**Last updated:** 2026-07-09  
+**Last updated:** 2026-07-26  
 
 **Canonical APK URL (first install + in-app update):**
 
 ```text
-https://ctp-job-cards-landing.web.app/releases/latest.apk
+https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media
 ```
 
 | Path | Purpose |
@@ -25,9 +25,9 @@ Auth for the app is **always in-app** (not App Distribution, not the landing reg
 ```text
 1. Bump pubspec + CHANGELOG
 2. flutter build apk --target-platform android-arm64 --release
-3. pwsh .\scripts\publish-landing-apk.ps1   (or node build-landing.js + deploy landing)
-4. Browser: open latest.apk URL → must download ~45–50 MB
-5. Admin → Shared download URL = canonical URL above
+3. pwsh .\scripts\publish-landing-apk.ps1   (Storage upload + thin landing)
+4. Browser: open canonical Storage URL → must download ~45–50 MB
+5. Admin → Shared download URL = canonical URL above (set once; keep forever)
 6. Admin → version + build (+ channel force as needed) → Save publish
 7. Optional: RC latest_version / latest_build / download_url (same URL) / release_notes
 8. Pilot: Settings → Check for update → Download & install
@@ -71,19 +71,19 @@ Do **not** promote to factory `latest.apk` until:
 3. Geofence / on-site flip (or reboot → BootReceiver re-register)  
 4. Ink **Receive Ink (IBC)** barcode scan  
 5. Security disc/licence scan (if that cohort is piloting)  
-6. Stay on-site long enough for WorkManager tick (or force a location check)  
+6. Stay on-site long enough for Workmanager tick (or force a location check)  
 7. Timesheet PDF / share if used  
 8. In-app update install path (FileProvider) if testing updates  
 9. Kiosk tablet only if that device is in the pilot
 
-### C. Host APK on landing (official file)
+### C. Upload APK to Cloud Storage (official file)
 
 | # | Step | Command / note |
 |---|------|----------------|
-| C1 | Assemble + deploy | **Preferred:** `pwsh .\scripts\publish-landing-apk.ps1` |
-| C1b | Manual | `node build-landing.js` then `firebase deploy --only hosting:landing --project ctp-job-cards` |
-| C2 | Order | `build-landing.js` **wipes** `landing-deploy/`. APK is copied **at the end** only if `app-release.apk` already exists. Always build APK **before** `build-landing.js`. **`landing-deploy/` is not in git** (build artifact only); edit staff docs in `docs/` then rebuild. |
-| C3 | Verify | Browser (or incognito): open canonical URL → large APK download, **not** Google login, **not** 404 |
+| C1 | Upload + landing | **Preferred:** `pwsh .\scripts\publish-landing-apk.ps1` |
+| C1b | Manual | `pwsh .\scripts\upload-release-apk.ps1 -Name latest` then `node build-landing.js` + `firebase deploy --only hosting:landing --project ctp-job-cards` |
+| C2 | Order | Build APK **before** upload. Landing is HTML/docs only — APK is **not** on Hosting. Legacy `/releases/*.apk` Hosting paths **302** to Storage. |
+| C3 | Verify | Browser (or incognito): open canonical Storage URL → large APK download, **not** Google login, **not** 404 |
 | C4 | Optional archive | Keep a local copy named `ctp-job-cards-X.Y.Z-BUILD.apk` for rollback |
 
 ### D. Tell the app (Admin — required)
@@ -92,7 +92,7 @@ Open Job Cards as **admin** → **Admin → Settings → App Update Control**.
 
 | # | Field | Value |
 |---|--------|--------|
-| D1 | **Shared download URL** | `https://ctp-job-cards-landing.web.app/releases/latest.apk` |
+| D1 | **Shared download URL** | `https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media` |
 | D2 | **Version** | e.g. `2.3.0` (left of `+` in pubspec) |
 | D3 | **Build** | e.g. `145` (right of `+`) |
 | D4 | **Channel** | Pilot: **People** first. Factory soft: **Default**, Force **off**. Dept force: **Departments** + pickers; keep Default lower if others must not force |
@@ -109,18 +109,18 @@ Firebase Console → **Remote Config** (project `ctp-job-cards`).
 |-----|-----------|
 | `latest_version` | Same as Admin version |
 | `latest_build` | Same as Admin build |
-| `download_url` | **Same Hosting URL** as Shared download URL (not App Distribution) |
+| `download_url` | **same Storage URL** as Shared download URL (not App Distribution) |
 | `force_update` | Prefer controlling force via **Admin channels**; RC is seed only |
 | `release_notes` | Short text for landing badge if used |
 
-**Why both exist:** Check for update loads **RC first as a seed**, then **Firestore `settings/app` wins** when channel publish metadata is present (version/build set). Admin publish is the **source of truth**. Stale RC with an old App Distribution link can confuse diagnostics if Firestore is incomplete — keep RC aligned with the Hosting URL.
+**Why both exist:** Check for update loads **RC first as a seed**, then **Firestore `settings/app` wins** when channel publish metadata is present (version/build set). Admin publish is the **source of truth**. Stale RC with an old App Distribution link can confuse diagnostics if Firestore is incomplete — keep RC aligned with the Storage URL.
 
 ### F. Verify
 
 | # | Check | Pass criteria |
 |---|--------|----------------|
 | F1 | Landing | Download button / QR installs APK |
-| F2 | Old phone | **Settings → Check for update** shows current vs latest, channel, **Hosting** URL |
+| F2 | Old phone | **Settings → Check for update** shows current vs latest, channel, **Storage** URL |
 | F3 | Soft | Banner → Update → download → install → What’s changed |
 | F4 | Later | Soft snoozes ~24h; Settings check still works |
 | F5 | Force (if used) | Full screen; resume still blocks until installed |
@@ -146,10 +146,10 @@ Order inside `UpdateService` (**build 147+** — Admin first):
 
 Older builds (≤146) loaded RC first and kept App Distribution URLs when Admin left channel URL empty — fixed in code.
 
-**Where it should point:** the Hosting APK:
+**Where it should point:** the Storage APK:
 
 ```text
-https://ctp-job-cards-landing.web.app/releases/latest.apk
+https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media
 ```
 
 Set that in **Admin Shared download URL** (and channel URL if separate). Optional: set RC `download_url` to the same value so gap-fill is not App Distribution.
@@ -209,7 +209,7 @@ Skill: **`/mobile-pilot-release`**.
 | Stop serving this binary | Redeploy landing without `releases/latest.apk`, or overwrite with good APK |
 | Change location | New path or host → Admin Shared URL + landing button/QR → Save |
 | Block old app versions | Raise **min supported build** + working Shared URL |
-| Full site down | Hosting disable — kills page + APK; only if intentional |
+| Full site down | Hosting disable — kills landing page (APK still on Storage); only if intentional |
 
 In-app clients pick up a **new** Admin URL on next successful update check.
 

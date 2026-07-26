@@ -21,7 +21,7 @@ import '../utils/version_compare.dart';
 ///
 /// Priority (highest first): matched `updateChannels` → shared
 /// `updateDownloadUrl` / legacy publish fields → Remote Config gaps only.
-/// This prevents a stale RC App Distribution URL from winning over Admin Hosting.
+/// This prevents a stale RC App Distribution URL from winning over Admin Storage.
 ///
 /// Check cadence:
 /// * **Cold start / resume / employee cohort ready** → network re-check
@@ -520,7 +520,7 @@ class UpdateService {
                 const Padding(
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
-                    'This URL is Firebase App Distribution (login page) — set Admin Shared download URL to the Hosting latest.apk link.',
+                    'This URL is Firebase App Distribution (login page) — set Admin Shared download URL to the Storage latest.apk link (see publish-landing-apk.ps1).',
                     style: TextStyle(color: Colors.orange, fontSize: 12, height: 1.3),
                   ),
                 ),

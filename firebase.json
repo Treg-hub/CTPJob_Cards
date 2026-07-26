@@ -75,6 +75,18 @@
         "dev-docs/**",
         "**/dev-docs/**"
       ],
+      "redirects": [
+        {
+          "source": "/releases/latest.apk",
+          "destination": "https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media",
+          "type": 302
+        },
+        {
+          "source": "/releases/pilot.apk",
+          "destination": "https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Fpilot.apk?alt=media",
+          "type": 302
+        }
+      ],
       "headers": [
         {
           "source": "/**",

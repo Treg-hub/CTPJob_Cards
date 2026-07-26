@@ -936,7 +936,7 @@
               </div>
 
               <a id="download-btn"
-                 href="/releases/latest.apk"
+                 href="https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media"
                  class="btn-download inline-flex items-center justify-center gap-2 w-full bg-brand hover:bg-brand-dark active:bg-brand-darker text-white font-bold rounded-card px-5 py-3.5 transition-colors text-sm">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Download app
@@ -999,16 +999,17 @@
     //  is unreachable. Update these when doing a release so the
     //  page is correct even before Remote Config is fetched.
     // ─────────────────────────────────────────────────────────────
-    // Official APK always lives on this site. In-app updates should use the same
-    // absolute URL in Admin → Shared download URL.
-    var OFFICIAL_APK_PATH = '/releases/latest.apk';
-    var OFFICIAL_APK_ABS  = 'https://ctp-job-cards-landing.web.app' + OFFICIAL_APK_PATH;
+    // Official APK lives on Cloud Storage (stable path, overwritten each ship).
+    // Admin → Shared download URL must be this same absolute URL.
+    // Legacy /releases/latest.apk on this Hosting site 302-redirects here.
+    var OFFICIAL_APK_ABS =
+      'https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media';
 
     const RELEASE = {
       version:     '2.3.0',
       build:       '181',
-      // Always the Hosting file — never App Distribution (in-app + button need a real APK).
-      downloadUrl: OFFICIAL_APK_PATH,
+      // Direct Storage APK — never App Distribution (in-app + button need a real file).
+      downloadUrl: OFFICIAL_APK_ABS,
       notes: [
         'Factory floor app: job cards + Waste, Fleet, Ink, Site Security, Lurgi, Copper (role-gated)',
         'Download here once — Create account (clock number + email + password) or Log in inside the app',
@@ -1017,6 +1018,15 @@
     };
     // ─────────────────────────────────────────────────────────────
 
+    function isDirectApkUrl(url) {
+      if (!url || typeof url !== 'string') return false;
+      var u = url.trim();
+      if (!u) return false;
+      if (/appdistribution\.firebase/i.test(u)) return false;
+      // Storage alt=media, Hosting .apk, or gs-style https object ending in .apk
+      return /\.apk(\?|$)/i.test(u) || /releases%2F(latest|pilot)\.apk/i.test(u);
+    }
+
     function applyConfig() {
       const version = RELEASE.build
         ? RELEASE.version + ' (build ' + RELEASE.build + ')'
@@ -1024,7 +1034,7 @@
 
       document.getElementById('version-badge').textContent = 'Version ' + version;
       var dl = document.getElementById('download-btn');
-      if (dl) dl.href = RELEASE.downloadUrl || OFFICIAL_APK_PATH;
+      if (dl) dl.href = RELEASE.downloadUrl || OFFICIAL_APK_ABS;
 
       const notesList = document.getElementById('release-notes');
       notesList.innerHTML = '';
@@ -1034,6 +1044,24 @@
         li.innerHTML = '<span class="text-brand">·</span> ' + note;
         notesList.appendChild(li);
       });
+
+      // Rebuild QR when download URL changes (RC / Shared-aligned URL).
+      var container = document.getElementById('qr-canvas-container');
+      if (container) {
+        container.innerHTML = '';
+        try {
+          new QRCode(container, {
+            text: RELEASE.downloadUrl || OFFICIAL_APK_ABS,
+            width: 168,
+            height: 168,
+            colorDark: '#1a1a1a',
+            colorLight: '#F8EDE8',
+            correctLevel: QRCode.CorrectLevel.M,
+          });
+        } catch (e) {
+          container.innerHTML = '<div style="padding:16px; text-align:center; font-size:11px; color:#8B4228;">QR code unavailable<br/>Use the Download button</div>';
+        }
+      }
     }
 
     applyConfig();
@@ -1047,24 +1075,8 @@
       header.classList.toggle('header-scrolled', window.scrollY > 8);
     }, { passive: true });
 
-    // QR → absolute APK URL (phones need a full https link)
-    (function() {
-      var container = document.getElementById('qr-canvas-container');
-      try {
-        new QRCode(container, {
-          text: OFFICIAL_APK_ABS,
-          width: 168,
-          height: 168,
-          colorDark: '#1a1a1a',
-          colorLight: '#F8EDE8',
-          correctLevel: QRCode.CorrectLevel.M,
-        });
-      } catch (e) {
-        container.innerHTML = '<div style="padding:16px; text-align:center; font-size:11px; color:#8B4228;">QR code unavailable<br/>Use the Download button</div>';
-      }
-    })();
-
-    // Remote Config: version / build / notes only. Download stays on this site.
+    // Remote Config: version / build / notes; download_url only if it is a direct APK
+    // (same value as Admin Shared download URL — never App Distribution).
     (function() {
       try {
         var app = firebase.initializeApp({
@@ -1089,14 +1101,18 @@
           var version = rc.getString('latest_version');
           var build   = rc.getString('latest_build');
           var notes   = rc.getString('release_notes');
+          var dlUrl   = (rc.getString('download_url') || '').trim();
 
           if (version) RELEASE.version = version;
           if (build)   RELEASE.build   = build;
           if (notes) {
             RELEASE.notes = notes.split('\n').map(function(n) { return n.trim(); }).filter(Boolean);
           }
-          // Keep download on Hosting latest.apk (ignore old App Distribution RC values).
-          RELEASE.downloadUrl = OFFICIAL_APK_PATH;
+          if (isDirectApkUrl(dlUrl)) {
+            RELEASE.downloadUrl = dlUrl;
+          } else {
+            RELEASE.downloadUrl = OFFICIAL_APK_ABS;
+          }
           applyConfig();
         }).catch(function(err) {
           console.warn('[Landing] Remote Config fetch failed — showing fallback values.', err);
