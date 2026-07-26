@@ -122,11 +122,15 @@ class JobCardActionsService {
 
   /// Complete a job (close it) or move it to Monitoring, recording the
   /// corrective action both as a structured log entry and the legacy string.
+  ///
+  /// Optional [failureSubtype]: free-text refinement under job.type (breakdown
+  /// family SSoT). Blank is allowed — same philosophy as notes/comments.
   Future<void> completeJob(
     JobCard job,
     Employee by,
     String note, {
     required bool withMonitoring,
+    String? failureSubtype,
   }) async {
     final now = DateTime.now();
     final prefix = withMonitoring ? 'Monitoring by' : 'Completed by';
@@ -137,6 +141,7 @@ class JobCardActionsService {
       assigneeNames: const [],
       timestamp: now,
     );
+    final subtype = (failureSubtype ?? '').trim();
 
     await _apply(job.id!, {
       'status':
@@ -148,6 +153,8 @@ class JobCardActionsService {
       'correctiveAction':
           job.correctiveAction + _legacyEntry(by, note, prefix: '$prefix '),
       'correctiveActionLog': FieldValue.arrayUnion([_logEntry(by, note)]),
+      // Always write so blank clears a mistaken prior value on re-complete paths.
+      'failureSubtype': subtype,
       'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
       ..._actorStamp(by),
     });

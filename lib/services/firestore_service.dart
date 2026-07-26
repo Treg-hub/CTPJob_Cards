@@ -516,6 +516,29 @@ class FirestoreService {
     }
   }
 
+  /// Recent free-text [failureSubtype] values for [type] (client-side filter).
+  /// Used as autocomplete history under type-scoped seeds. No composite index.
+  Future<List<String>> fetchFailureSubtypeHistory(JobType type) async {
+    try {
+      final snap = await _firestore
+          .collection(Collections.jobCards)
+          .where('type', isEqualTo: type.name)
+          .limit(120)
+          .get();
+      final values = <String>[];
+      for (final doc in snap.docs) {
+        final raw = doc.data()['failureSubtype'];
+        if (raw is! String) continue;
+        final s = raw.trim();
+        if (s.isNotEmpty) values.add(s);
+      }
+      return values;
+    } catch (e) {
+      debugPrint('fetchFailureSubtypeHistory: $e');
+      return const [];
+    }
+  }
+
   /// Manager status override. Field-scoped update (no whole-doc merge) that
   /// also keeps the lifecycle timestamps coherent:
   ///  - closed  → stamps closedAt (Job History / closed queries order on it)
@@ -524,42 +547,94 @@ class FirestoreService {
   ///  - open    → clears all completion fields so a reopened job doesn't show
   ///              a stale "Completed by"
   /// Appends a status-change event to assignmentHistory via arrayUnion.
+  ///
+  /// **Audit (2026-07-26):** every status change requires [reason] and stamps
+  /// `lastUpdatedBy` / `lastUpdatedByName` so `onJobCardWritten` attributes the
+  /// actor. Reason is dual-written to notes (+ notesLog). Closing (or moving
+  /// to monitor via this path) also appends [reason] to correctiveAction so
+  /// the fix narrative is never skipped when managers flip status.
   Future<void> changeJobCardStatus({
     required String jobCardId,
     required JobCard current,
     required JobStatus to,
     required String byName,
     required String byClockNo,
+    required String reason,
   }) async {
     assertPersonaSubmitAllowed();
+    final trimmed = reason.trim();
+    if (trimmed.isEmpty) {
+      throw Exception('A reason is required for every status change');
+    }
+    if (to == JobStatus.closed && trimmed.length < 4) {
+      throw Exception('Enter a corrective action (what fixed it) when closing');
+    }
     try {
       final now = DateTime.now();
+      final fromLabel = current.status.displayName;
+      final toLabel = to.displayName;
       final event = AssignmentEvent(
-        assignedByName: 'Status → ${to.displayName} by $byName',
+        assignedByName: 'Status $fromLabel → $toLabel by $byName: $trimmed',
         assignedByClockNo: byClockNo,
         assigneeClockNos: const [],
         assigneeNames: const [],
         timestamp: now,
       );
+      final stamp =
+          '[${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}]';
+      final statusNarrative =
+          '$stamp Status $fromLabel → $toLabel by $byName: $trimmed';
+      final logEntry = <String, dynamic>{
+        'text': 'Status $fromLabel → $toLabel: $trimmed',
+        'by': byName,
+        'byClockNo': byClockNo,
+        'at': Timestamp.fromDate(now),
+      };
       final update = <String, dynamic>{
         'status': to.name,
         'lastUpdatedAt': FieldValue.serverTimestamp(),
+        // Required for job_card_audit actor attribution (onJobCardWritten).
+        'lastUpdatedBy': byClockNo,
+        'lastUpdatedByName': byName,
         'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
+        'notes': (current.notes.isEmpty ? '' : current.notes) + '\n\n$statusNarrative',
+        'notesLog': FieldValue.arrayUnion([logEntry]),
       };
+      // Close / monitor via status picker must capture fix narrative in CA.
+      if (to == JobStatus.closed || to == JobStatus.monitor) {
+        final caPrefix =
+            to == JobStatus.closed ? 'Completed by' : 'Monitoring by';
+        final caLegacy =
+            '\n\n$stamp $caPrefix $byName: $trimmed';
+        update['correctiveAction'] =
+            (current.correctiveAction.isEmpty ? '' : current.correctiveAction) +
+                caLegacy;
+        update['correctiveActionLog'] = FieldValue.arrayUnion([
+          {
+            'text': trimmed,
+            'by': byName,
+            'byClockNo': byClockNo,
+            'at': Timestamp.fromDate(now),
+          },
+        ]);
+      }
       switch (to) {
         case JobStatus.closed:
           update['closedAt'] = Timestamp.fromDate(now);
+          update['completedAt'] = Timestamp.fromDate(now);
+          update['completedBy'] = byName;
+          update['monitoringStartedAt'] = FieldValue.delete();
+          break;
+        case JobStatus.monitor:
+          update['monitoringStartedAt'] = Timestamp.fromDate(now);
+          update['closedAt'] = FieldValue.delete();
+          // Keep completedAt/By if already set (monitor after partial work).
           if (current.completedAt == null) {
             update['completedAt'] = Timestamp.fromDate(now);
           }
           if (current.completedBy == null || current.completedBy!.isEmpty) {
             update['completedBy'] = byName;
           }
-          update['monitoringStartedAt'] = FieldValue.delete();
-          break;
-        case JobStatus.monitor:
-          update['monitoringStartedAt'] = Timestamp.fromDate(now);
-          update['closedAt'] = FieldValue.delete();
           break;
         case JobStatus.open:
         case JobStatus.inProgress:

@@ -76,6 +76,8 @@ class JobCard {
   final String notes;
   final String comments;
   final String correctiveAction;
+  /// Optional free-text after-fix refinement under [type] (breakdown family SSoT).
+  final String failureSubtype;
   final int reoccurrenceCount;
   final JobStatus status;
   final DateTime? createdAt;
@@ -124,6 +126,7 @@ class JobCard {
     this.notes = '',
     this.comments = '',
     this.correctiveAction = '',
+    this.failureSubtype = '',
     this.reoccurrenceCount = 1,
     this.status = JobStatus.open,
     this.isDeleted = false,
@@ -167,6 +170,7 @@ class JobCard {
       notes: data['notes'] as String? ?? '',
       comments: data['comments'] as String? ?? '',
       correctiveAction: data['correctiveAction'] as String? ?? '',
+      failureSubtype: data['failureSubtype'] as String? ?? '',
       reoccurrenceCount: data['reoccurrenceCount'] as int? ?? 1,
       status: JobStatusExtension.fromString(data['status'] as String? ?? 'Open'),
       isDeleted: data['is_deleted'] == true,
@@ -251,6 +255,7 @@ class JobCard {
       'notes': notes,
       'comments': comments,
       'correctiveAction': correctiveAction,
+      if (failureSubtype.isNotEmpty) 'failureSubtype': failureSubtype,
       'reoccurrenceCount': reoccurrenceCount,
       'status': status.name,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
@@ -315,6 +320,7 @@ class JobCard {
     String? notes,
     String? comments,
     String? correctiveAction,
+    String? failureSubtype,
     int? reoccurrenceCount,
     JobStatus? status,
     DateTime? createdAt,
@@ -354,6 +360,7 @@ class JobCard {
       notes: notes ?? this.notes,
       comments: comments ?? this.comments,
       correctiveAction: correctiveAction ?? this.correctiveAction,
+      failureSubtype: failureSubtype ?? this.failureSubtype,
       reoccurrenceCount: reoccurrenceCount ?? this.reoccurrenceCount,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,

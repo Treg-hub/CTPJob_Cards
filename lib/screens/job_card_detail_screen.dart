@@ -22,6 +22,7 @@ import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
+import '../widgets/failure_subtype_field.dart';
 
 class JobCardDetailScreen extends StatefulWidget {
   final JobCard jobCard;
@@ -1253,6 +1254,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   void _showCompleteDialog(JobCard jobCard) {
     final noteController = TextEditingController();
+    final subtypeController =
+        TextEditingController(text: jobCard.failureSubtype);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1269,14 +1272,19 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.green.withValues(alpha: 80)),
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Closure requires:', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                    SizedBox(height: 4),
-                    Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
-                    Text('• Root cause of the fault', style: TextStyle(fontSize: 12)),
-                    Text('• Any follow-up recommendations', style: TextStyle(fontSize: 12)),
+                    const Text('Closure requires:', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                    const SizedBox(height: 4),
+                    const Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
+                    const Text('• Root cause of the fault', style: TextStyle(fontSize: 12)),
+                    const Text('• Any follow-up recommendations', style: TextStyle(fontSize: 12)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Type (family): ${jobCard.type.displayName}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -1292,11 +1300,23 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 ),
                 maxLines: 5,
               ),
+              const SizedBox(height: 12),
+              FailureSubtypeField(
+                jobType: jobCard.type,
+                controller: subtypeController,
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              noteController.dispose();
+              subtypeController.dispose();
+            },
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () async {
               final note = noteController.text.trim();
@@ -1304,8 +1324,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
                 return;
               }
+              final subtype = subtypeController.text.trim();
               Navigator.pop(context);
-              await _completeJob(jobCard, false, note);
+              noteController.dispose();
+              subtypeController.dispose();
+              await _completeJob(jobCard, false, note, failureSubtype: subtype);
             },
             child: const Text('Complete'),
           ),
@@ -1316,6 +1339,8 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   void _showMonitorDialog(JobCard jobCard) {
     final noteController = TextEditingController();
+    final subtypeController =
+        TextEditingController(text: jobCard.failureSubtype);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1332,14 +1357,19 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.orange.withValues(alpha: 80)),
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Describe the intervention:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                    SizedBox(height: 4),
-                    Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
-                    Text('• Root cause (if identified)', style: TextStyle(fontSize: 12)),
-                    Text('• Why monitoring is still required', style: TextStyle(fontSize: 12)),
+                    const Text('Describe the intervention:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                    const SizedBox(height: 4),
+                    const Text('• What was done & parts used', style: TextStyle(fontSize: 12)),
+                    const Text('• Root cause (if identified)', style: TextStyle(fontSize: 12)),
+                    const Text('• Why monitoring is still required', style: TextStyle(fontSize: 12)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Type (family): ${jobCard.type.displayName}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -1355,11 +1385,23 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 ),
                 maxLines: 5,
               ),
+              const SizedBox(height: 12),
+              FailureSubtypeField(
+                jobType: jobCard.type,
+                controller: subtypeController,
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              noteController.dispose();
+              subtypeController.dispose();
+            },
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () async {
               final note = noteController.text.trim();
@@ -1367,8 +1409,11 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a description'), backgroundColor: Colors.red));
                 return;
               }
+              final subtype = subtypeController.text.trim();
               Navigator.pop(context);
-              await _completeJob(jobCard, true, note);
+              noteController.dispose();
+              subtypeController.dispose();
+              await _completeJob(jobCard, true, note, failureSubtype: subtype);
             },
             child: const Text('Start Monitoring'),
           ),
@@ -1409,14 +1454,24 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     );
   }
 
-  Future<void> _completeJob(JobCard jobCard, bool withMonitoring, String description) async {
+  Future<void> _completeJob(
+    JobCard jobCard,
+    bool withMonitoring,
+    String description, {
+    String? failureSubtype,
+  }) async {
     if (!guardPersonaSubmit(context)) return;
     final current = currentEmployee;
     if (current == null) return;
     final actor = resolveWriteActor(current)!;
     try {
-      await _actions.completeJob(jobCard, actor, description,
-          withMonitoring: withMonitoring);
+      await _actions.completeJob(
+        jobCard,
+        actor,
+        description,
+        withMonitoring: withMonitoring,
+        failureSubtype: failureSubtype,
+      );
       await _refreshJobCard();
 
       if (jobCard.operatorClockNo != null) {
@@ -1479,69 +1534,150 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
   void _showStatusChangeDialog(JobCard jobCard) {
     JobStatus selectedStatus = jobCard.status;
+    final reasonController = TextEditingController();
     // Parent messenger — never use dialog context after pop (causes
     // InheritedElement `_dependents.isEmpty` assertion crashes).
     final messenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
-        builder: (dialogCtx, setDialogState) => AlertDialog(
-          title: const Text('Change Job Status'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,   // ← Fixed here
-            children: [
-              SegmentedButton<JobStatus>(
-                segments: const [
-                  ButtonSegment(value: JobStatus.open, label: Text('Open')),
-                  ButtonSegment(value: JobStatus.monitor, label: Text('Monitor')),
-                  ButtonSegment(value: JobStatus.closed, label: Text('Closed')),
+        builder: (dialogCtx, setDialogState) {
+          final needsCorrective = selectedStatus == JobStatus.closed ||
+              selectedStatus == JobStatus.monitor;
+          return AlertDialog(
+            title: const Text('Change Job Status'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Current: ${jobCard.status.displayName}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<JobStatus>(
+                    segments: const [
+                      ButtonSegment(value: JobStatus.open, label: Text('Open')),
+                      ButtonSegment(
+                          value: JobStatus.inProgress, label: Text('In prog')),
+                      ButtonSegment(
+                          value: JobStatus.monitor, label: Text('Monitor')),
+                      ButtonSegment(
+                          value: JobStatus.closed, label: Text('Closed')),
+                    ],
+                    selected: {selectedStatus},
+                    onSelectionChanged: (Set<JobStatus> selection) {
+                      setDialogState(() => selectedStatus = selection.first);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      needsCorrective
+                          ? 'Closing or monitoring requires a corrective action (what was done / what fixed it). This is audited.'
+                          : 'Every status change requires a reason (audited on the job card and job_card_audit).',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    decoration: InputDecoration(
+                      labelText: needsCorrective
+                          ? 'Corrective action / reason *'
+                          : 'Reason for status change *',
+                      hintText: needsCorrective
+                          ? 'e.g. Replaced limit switch; tested OK'
+                          : 'e.g. Reopened — fault returned on shift',
+                      hintStyle: const TextStyle(fontSize: 12),
+                      border: const OutlineInputBorder(),
+                      alignLabelWithHint: true,
+                    ),
+                    maxLines: 4,
+                  ),
                 ],
-                selected: {selectedStatus},
-                onSelectionChanged: (Set<JobStatus> selection) {
-                  setDialogState(() => selectedStatus = selection.first);
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogCtx);
+                  reasonController.dispose();
                 },
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  if (selectedStatus == jobCard.status) {
+                    Navigator.pop(dialogCtx);
+                    reasonController.dispose();
+                    return;
+                  }
+                  final reason = reasonController.text.trim();
+                  if (reason.isEmpty) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Enter a reason for the status change'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  if (needsCorrective && reason.length < 4) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Enter a corrective action when closing or monitoring'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                  if (!guardPersonaSubmit(dialogCtx)) return;
+                  final actor = resolveWriteActor(currentEmployee);
+                  if (actor == null) return;
+                  Navigator.pop(dialogCtx);
+                  reasonController.dispose();
+                  try {
+                    await _firestoreService.changeJobCardStatus(
+                      jobCardId: jobCard.id!,
+                      current: jobCard,
+                      to: selectedStatus,
+                      byName: actor.name,
+                      byClockNo: actor.clockNo,
+                      reason: reason,
+                    );
+                    await _refreshJobCard();
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                          content: Text(
+                              'Status changed to ${selectedStatus.displayName}')),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                          content: Text('Error changing status: $e'),
+                          backgroundColor: Colors.red),
+                    );
+                  }
+                },
+                child: const Text('Change Status'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                if (selectedStatus == jobCard.status) {
-                  Navigator.pop(dialogCtx);
-                  return;
-                }
-                if (!guardPersonaSubmit(dialogCtx)) return;
-                final actor = resolveWriteActor(currentEmployee);
-                if (actor == null) return;
-                Navigator.pop(dialogCtx);
-                try {
-                  // Field-scoped update: stamps closedAt on close, clears
-                  // stale completion fields on reopen (copyWith can't null
-                  // fields, so the old whole-doc save left them behind).
-                  await _firestoreService.changeJobCardStatus(
-                    jobCardId: jobCard.id!,
-                    current: jobCard,
-                    to: selectedStatus,
-                    byName: actor.name,
-                    byClockNo: actor.clockNo,
-                  );
-                  await _refreshJobCard();
-                  if (!mounted) return;
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Status changed to ${selectedStatus.displayName}!')),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Error changing status: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              },
-              child: const Text('Change Status'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1982,6 +2118,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
                 ],
               ),
             ),
+            if (jobCard.failureSubtype.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Subtype: ${jobCard.failureSubtype.trim()}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
         ),
       ),

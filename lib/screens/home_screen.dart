@@ -36,6 +36,7 @@ import '../utils/role.dart' as role_utils;
 import '../widgets/persona_banner.dart';
 import '../widgets/persona_picker_dialog.dart';
 import '../widgets/job_card_tile.dart';
+import '../widgets/failure_subtype_field.dart';
 import '../widgets/session_health_banner.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/sync_indicator.dart';
@@ -2272,6 +2273,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   void _showMyWorkCompleteDialog(BuildContext context, JobCard job) {
     final notesController = TextEditingController();
+    final subtypeController = TextEditingController(text: job.failureSubtype);
     bool isCompleting = false;
 
     showDialog(
@@ -2279,14 +2281,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Complete Job'),
-          content: TextField(
-            controller: notesController,
-            decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
-            maxLines: 4,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Type (family): ${job.type.displayName}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description/Corrective Action Taken',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 4,
+                ),
+                const SizedBox(height: 12),
+                FailureSubtypeField(
+                  jobType: job.type,
+                  controller: subtypeController,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                notesController.dispose();
+                subtypeController.dispose();
+              },
               child: const Text('Cancel'),
             ),
             TextButton(
@@ -2306,14 +2334,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                       final current = currentEmployee;
                       if (current == null) return;
                       final actor = resolveWriteActor(current)!;
+                      final subtype = subtypeController.text.trim();
                       setDialogState(() => isCompleting = true);
                       try {
                         // Same field-scoped action as the detail screen —
                         // the old My Work path wrote the note into `notes`
                         // instead of `correctiveAction` and merge-set the
                         // whole document.
-                        await _actions.completeJob(job, actor, note,
-                            withMonitoring: false);
+                        await _actions.completeJob(
+                          job,
+                          actor,
+                          note,
+                          withMonitoring: false,
+                          failureSubtype: subtype,
+                        );
 
                         if (job.operatorClockNo != null) {
                           try {
@@ -2342,6 +2376,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
                         if (context.mounted) {
                           Navigator.pop(context);
+                          notesController.dispose();
+                          subtypeController.dispose();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Job completed')),
                           );
@@ -2371,6 +2407,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   void _showMyWorkMonitorDialog(BuildContext context, JobCard job) {
     final notesController = TextEditingController();
+    final subtypeController = TextEditingController(text: job.failureSubtype);
     bool isMonitoring = false;
 
     showDialog(
@@ -2378,14 +2415,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Start Monitoring'),
-          content: TextField(
-            controller: notesController,
-            decoration: const InputDecoration(labelText: 'Description/Corrective Action Taken'),
-            maxLines: 4,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Type (family): ${job.type.displayName}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description/Corrective Action Taken',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 4,
+                ),
+                const SizedBox(height: 12),
+                FailureSubtypeField(
+                  jobType: job.type,
+                  controller: subtypeController,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                notesController.dispose();
+                subtypeController.dispose();
+              },
               child: const Text('Cancel'),
             ),
             TextButton(
@@ -2405,13 +2468,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                       final current = currentEmployee;
                       if (current == null) return;
                       final actor = resolveWriteActor(current)!;
+                      final subtype = subtypeController.text.trim();
                       setDialogState(() => isMonitoring = true);
                       try {
-                        await _actions.completeJob(job, actor, note,
-                            withMonitoring: true);
+                        await _actions.completeJob(
+                          job,
+                          actor,
+                          note,
+                          withMonitoring: true,
+                          failureSubtype: subtype,
+                        );
 
                         if (context.mounted) {
                           Navigator.pop(context);
+                          notesController.dispose();
+                          subtypeController.dispose();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Job moved to monitoring')),
                           );

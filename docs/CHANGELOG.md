@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-26 — 2.3.0+192 — Clearer job close + status changes
+
+### What you will notice
+
+- When you **complete** or **start monitoring** a job, you can optionally pick or type a **failure subtype** (suggestions depend on whether the job is Mechanical, Electrical, and so on).
+- Changing a job’s **status** now asks for a **reason**. Closing or monitoring this way also records what was done as corrective action.
+- Job detail shows the subtype when one was saved.
+
+---
+
 ## 2026-07-25 — 2.3.0+191 — Ink signed RFO + Lurgi overhead tank
 
 ### What you will notice
