@@ -20,8 +20,9 @@
 - [ ] Sign out of any personal Google accounts that aren't relevant.
 - [ ] **Tab 1**: Open `presentation/presentation.html` from the project folder. Hit `F` to fullscreen. Hit `Home` to go to slide 1.
 - [ ] **Tab 2**: Open the live web app. Sign in as an **admin** account so you have full visibility (audit log, escalation config, test alerts).
-- [ ] **Tab 3** (optional): A second instance of the web app signed in as a **technician** — useful for the lifecycle demo (Slide 9) so you can show "Assign Self" happen from a separate user.
-- [ ] **Tab 4**: The **Firebase Firestore console** — sign in, open the project, pre-navigate to the **`notifications`** collection. This is the first collection you'll show on Slide 13. Have **`job_cards`**, **`geo_fence_logs`**, and **`employees`** bookmarked or one click away.
+- [ ] **Tab 3** (optional): A second instance of the web app signed in as a **technician** — useful for the lifecycle demo (Job Cards path) so you can show "Assign Self" happen from a separate user.
+- [ ] **Tab 4**: The **Firebase Firestore console** — sign in, open the project, pre-navigate to the **`notifications`** collection. This is what you'll show on the Accountability slide. Have **`job_cards`**, **`geo_fence_logs`**, and **`employees`** bookmarked or one click away.
+- [ ] On the HTML deck, **tick departments in the room** on slide 1, then **Start presentation** (or Factory overview) before fullscreen.
 - [ ] Confirm `Ctrl+Tab` cycles between tabs cleanly. Practice it twice.
 - [ ] Close every other tab. Close other apps. **Slack, Outlook, Teams — kill them.** No notifications during the talk.
 
@@ -30,7 +31,7 @@
 - [ ] In the live web app (admin tab), **create one test job card** on a fake test machine. Department: "Test", Area: "Test", Machine: "DEMO_MACHINE_1", Part: "DEMO_PART".
 - [ ] Add a description like: "Pre-demo seed for accountability slide".
 - [ ] Set priority to **P2** (low enough not to alarm anyone, high enough to show in lists).
-- [ ] Open the audit log to confirm the entry shows up. This is what you'll show on Slide 13.
+- [ ] Open the audit log to confirm the entry shows up. This is what you'll show on the Accountability slide.
 
 ## 4. P5 alarm dry-run (2 min)
 
