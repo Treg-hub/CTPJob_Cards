@@ -429,17 +429,17 @@ class WasteService {
             snap.docs.map((d) => WasteLoad.fromFirestore(d)).toList());
   }
 
-  /// How far back the mobile home lists reach. Older loads stay visible in
-  /// Reports and Pulse — the home screen is a recent-work view (and the
-  /// server-side cutoff saves Firestore reads).
-  static const Duration homeListWindow = Duration(days: 14);
+  /// How far back completed/cancelled loads appear on mobile home.
+  /// Incomplete loads (active + scheduled) are not date-windowed — they stay
+  /// visible until finished. Older completed history remains on Pulse.
+  static const Duration homeListWindow = Duration(days: 30);
 
   Timestamp get _homeWindowCutoff =>
       Timestamp.fromDate(DateTime.now().subtract(homeListWindow));
 
-  /// Active (in-flight) loads from the last [homeListWindow]: draft,
-  /// pendingWeighbridge, pendingCostReview. Older stragglers remain visible
-  /// in Pulse. Used by [WasteHomeScreen] together with [watchRecentCompleted].
+  /// All incomplete in-flight loads (no date cutoff): draft,
+  /// pendingWeighbridge, pendingCostReview, in_progress.
+  /// Used by [WasteHomeScreen] together with [watchRecentCompleted].
   Stream<WasteLoadListSnapshot> watchActiveLoadsWithMeta() {
     return resilientSnapshots(
       () => _firestore
@@ -451,9 +451,8 @@ class WasteService {
             WasteLoadStatus.pendingCostReview.value,
             'in_progress', // future-proofing — set by web/Pulse, no mobile enum yet
           ])
-          .where('createdAt', isGreaterThanOrEqualTo: _homeWindowCutoff)
           .orderBy('createdAt', descending: true)
-          .limit(100)
+          .limit(200)
           .snapshots(),
       debugName: 'waste_active_loads',
     ).map((snap) => (
@@ -467,7 +466,7 @@ class WasteService {
 
   /// The [limit] most-recently completed or cancelled loads within
   /// [homeListWindow]. Used by [WasteHomeScreen] "Recent" section.
-  Stream<List<WasteLoad>> watchRecentCompleted({int limit = 10}) {
+  Stream<List<WasteLoad>> watchRecentCompleted({int limit = 50}) {
     return _firestore
         .collection(Collections.wasteLoads)
         .where('is_deleted', isEqualTo: false)
@@ -593,17 +592,15 @@ class WasteService {
     return loadId;
   }
 
-  /// Stream of scheduled (not yet collected) loads, ordered by expected date
-  /// ascending. One range on `scheduled_for` covers both future-scheduled
-  /// loads and recently-past ones still inside [homeListWindow] (docs missing
-  /// `scheduled_for` were already excluded by the orderBy).
-  /// Used by [WasteHomeScreen] "Incoming" section.
-  Stream<List<WasteLoad>> watchScheduledLoads({int limit = 50}) {
+  /// Stream of all scheduled (not yet collected) loads, ordered by expected
+  /// date ascending — future and overdue alike (no date cutoff). Docs missing
+  /// `scheduled_for` are excluded by the orderBy. Used by [WasteHomeScreen]
+  /// "Incoming" section.
+  Stream<List<WasteLoad>> watchScheduledLoads({int limit = 200}) {
     return _firestore
         .collection(Collections.wasteLoads)
         .where('is_deleted', isEqualTo: false)
         .where('status', isEqualTo: WasteLoadStatus.scheduled.value)
-        .where('scheduled_for', isGreaterThanOrEqualTo: _homeWindowCutoff)
         .orderBy('scheduled_for', descending: false)
         .limit(limit)
         .snapshots()

@@ -2,6 +2,11 @@
 
 Append-only change log of completed work, in reverse-chronological order (newest first).
 
+- **Waste home list window (2026-07-28)**:
+  - Incomplete loads (active + scheduled) have **no date cutoff** — all stay on mobile home until completed/cancelled (cap 200 each).
+  - Completed/cancelled: last **30 days**, cap **50** (`WasteService.homeListWindow`).
+  - Map: Waste card.
+
 - **Fleet auto-nav + on-site/update hydrate (2026-07-17)**:
   - Fleet shell auto-nav uses `isHysterMechanicByPosition` only (not `isFleetMechanic` claim — admins no longer jump to Fleet on load/resume). Settles after non-empty position so late claims cannot re-trigger.
   - Shared `_hydrateShellData` for became-on-site, resume, post-update bootstrap; GPS no longer blocks stream/settings recovery; `RetryTriggers.notifyForceResubscribe` tears down alive-but-stuck listeners.

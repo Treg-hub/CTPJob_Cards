@@ -763,7 +763,7 @@ class _WasteHomeScreenState extends ConsumerState<WasteHomeScreen> {
                         .toList();
                   }(),
 
-                  // ── Recent completed (last 10) ────────────────────────────
+                  // ── Recent completed (last 30 days, cap 50) ───────────────
                   ...() {
                     final filtered = _completedLoads.where((load) {
                       if (_filter == 'today') {
