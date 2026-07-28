@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-28 — 2.3.0+193 — Waste home: fuller load lists
+
+### What you will notice
+
+- **Waste** home keeps **active** and **scheduled** loads visible until they are finished (not only a short recent slice).
+- Completed and cancelled loads show the **last 30 days** (up to 50) so you can find recent history more easily.
+
+---
+
 ## 2026-07-26 — 2.3.0+192 — Clearer job close + status changes
 
 ### What you will notice
