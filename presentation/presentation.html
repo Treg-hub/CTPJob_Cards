@@ -46,7 +46,6 @@
   }
   .slide.active { display: flex; }
 
-  /* HEADER */
   .slide-header {
     display: flex;
     align-items: center;
@@ -76,7 +75,6 @@
     color: #1a1a1a;
   }
 
-  /* CONTENT */
   .slide-body {
     flex: 1;
     display: flex;
@@ -117,7 +115,6 @@
     flex-shrink: 0;
   }
 
-  /* TABLE */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -142,20 +139,6 @@
   table .no { color: var(--text-dim); }
   table .silent { color: var(--p3); font-weight: 600; }
 
-  .badge {
-    display: inline-block;
-    padding: 0.4vh 0.9vw;
-    border-radius: 4px;
-    font-size: 1vw;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-  }
-  .badge.p1 { background: var(--p1); color: white; }
-  .badge.p2 { background: var(--p2); color: #111; }
-  .badge.p3 { background: var(--p3); color: #111; }
-  .badge.p4 { background: var(--p4); color: white; }
-  .badge.p5 { background: var(--p5); color: white; }
-
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2vw; }
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6vw; }
 
@@ -173,7 +156,6 @@
   }
   .card p { font-size: 1.3vw; color: var(--text-muted); }
 
-  /* STEPS */
   .steps {
     display: flex; flex-direction: column; gap: 1.1vh;
   }
@@ -196,7 +178,6 @@
   .step-text h4 { color: var(--text); font-size: 1.3vw; margin-bottom: 0.3vh; }
   .step-text p { color: var(--text-muted); font-size: 1.1vw; line-height: 1.35; }
 
-  /* PERMISSIONS GRID */
   .perm-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -221,7 +202,6 @@
   .perm-text h4 { color: var(--text); font-size: 1.35vw; margin-bottom: 0.5vh; }
   .perm-text p { color: var(--text-muted); font-size: 1.1vw; line-height: 1.35; }
 
-  /* PRIORITY TABLE */
   .priority-list {
     display: flex; flex-direction: column; gap: 1vh;
   }
@@ -249,7 +229,6 @@
   .pri-text { font-size: 1.5vw; color: var(--text-muted); }
   .pri-text strong { color: var(--text); }
 
-  /* STATUS FLOW */
   .status-flow {
     display: flex; align-items: center; justify-content: space-between;
     gap: 1.2vw;
@@ -271,7 +250,6 @@
   .status-pill p { font-size: 1.05vw; color: var(--text-muted); }
   .arrow { color: var(--brand); font-size: 2.2vw; font-weight: 800; }
 
-  /* NOTIFICATION FLOW DIAGRAM */
   .notif-flow {
     background: var(--bg-soft);
     padding: 2.4vh 2vw;
@@ -341,7 +319,6 @@
   .flow-path.a .path-result { color: var(--good); }
   .flow-path.b .path-result { color: var(--p5); }
 
-  /* CALLOUT BOX */
   .callout {
     background: linear-gradient(135deg, rgba(255,140,66,0.15), rgba(255,140,66,0.05));
     border-left: 5px solid var(--brand);
@@ -353,7 +330,6 @@
   }
   .callout strong { color: var(--brand); font-style: normal; }
 
-  /* DO / DONT */
   .compare {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -378,7 +354,6 @@
   .compare .row:last-child { border-bottom: none; }
   .compare .row strong { color: var(--text); display: block; margin-bottom: 0.3vh; }
 
-  /* STATS */
   .stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -405,7 +380,6 @@
     letter-spacing: 1px;
   }
 
-  /* FOOTER */
   .deck-footer {
     position: absolute;
     bottom: 1.6vh;
@@ -415,13 +389,28 @@
     font-size: 0.95vw;
     color: var(--text-dim);
     letter-spacing: 1px;
+    z-index: 5;
+    pointer-events: none;
   }
+  .deck-footer button {
+    pointer-events: auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 0.4vh 0.8vw;
+    font-size: 0.85vw;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+  }
+  .deck-footer button:hover { border-color: var(--brand); color: var(--brand); }
   .progress-bar {
     position: absolute;
     bottom: 0; left: 0;
     height: 4px;
     background: var(--brand);
     transition: width 0.3s ease;
+    z-index: 6;
   }
   .nav-hint { font-size: 0.85vw; color: var(--text-dim); }
   .nav-hint kbd {
@@ -434,7 +423,6 @@
     font-size: 0.9vw;
   }
 
-  /* ROLES GRID */
   .roles {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -450,7 +438,6 @@
   .role-card .who { color: var(--text); font-size: 1.25vw; margin-bottom: 0.8vh; }
   .role-card .what { color: var(--text-muted); font-size: 1.15vw; }
 
-  /* THREE ASKS */
   .asks { display: flex; flex-direction: column; gap: 2vh; max-width: 80%; margin: 0 auto; }
   .ask {
     display: flex; gap: 2vw; align-items: center;
@@ -470,25 +457,186 @@
   }
   .ask-text { font-size: 1.7vw; color: var(--text); }
   .ask-text strong { color: var(--brand); }
+
+  /* Audience picker */
+  .picker-wrap {
+    width: 100%;
+    max-width: 92%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2.4vh;
+  }
+  .picker-title {
+    font-size: 2.8vw;
+    font-weight: 700;
+    color: var(--text);
+    text-align: center;
+  }
+  .picker-sub {
+    font-size: 1.25vw;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 70%;
+    margin: 0 auto;
+  }
+  .picker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.4vh 1.4vw;
+  }
+  .picker-btn {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2vh 1.4vw;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .picker-btn:hover {
+    border-color: var(--brand);
+    transform: translateY(-1px);
+  }
+  .picker-btn:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .picker-btn .p-label {
+    display: block;
+    font-size: 1.35vw;
+    font-weight: 700;
+    color: var(--brand);
+    margin-bottom: 0.5vh;
+  }
+  .picker-btn .p-desc {
+    display: block;
+    font-size: 1.05vw;
+    color: var(--text-muted);
+    line-height: 1.35;
+  }
+  .picker-btn.wide {
+    grid-column: 1 / -1;
+    text-align: center;
+    border-color: rgba(255,140,66,0.35);
+  }
+
+  .dept-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1vh 1.2vw;
+    text-align: left;
+  }
+  .dept-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8vw;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2vh 1vw;
+    cursor: pointer;
+    font-size: 1.15vw;
+    color: var(--text);
+  }
+  .dept-check:hover { border-color: rgba(255,140,66,0.45); }
+  .dept-check input {
+    width: 1.2vw;
+    height: 1.2vw;
+    margin-top: 0.3vh;
+    accent-color: var(--brand);
+    flex-shrink: 0;
+  }
+  .dept-check span { color: var(--text-muted); line-height: 1.35; }
+  .dept-check span strong { color: var(--text); display: block; font-size: 1.2vw; }
+
+  .picker-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1vh 1vw;
+    justify-content: center;
+    align-items: center;
+    margin-top: 0.5vh;
+  }
+  .picker-actions .picker-btn {
+    padding: 1.4vh 2vw;
+    font-size: 1.1vw;
+    border: none;
+    color: #1a1a1a;
+    background: var(--brand);
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .picker-actions .picker-btn.secondary {
+    background: var(--bg-soft);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .picker-actions .picker-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .mgr-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.8vw;
+    font-size: 1.15vw;
+    color: var(--text-muted);
+    padding: 1vh 1.2vw;
+    background: var(--bg-soft);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .mgr-toggle input { accent-color: var(--brand); width: 1.2vw; height: 1.2vw; }
+
+  .audience-only { display: none; }
+  body[data-managers="1"] .audience-only.managers { display: inline; }
+  body:not([data-managers="1"]) .audience-only.operators { display: inline; }
+  .callout .audience-only.managers,
+  .callout .audience-only.operators { display: none; }
+  body[data-managers="1"] .callout .audience-only.managers { display: inline; }
+  body:not([data-managers="1"]) .callout .audience-only.operators { display: inline; }
 </style>
 </head>
 <body>
 <div class="deck" id="deck">
 
-<!-- ============ SLIDE 1 — Cover ============ -->
-<section class="slide active">
+<!-- Picker — departments in the room -->
+<section class="slide active" data-depts="picker">
   <div class="slide-body center">
-    <div class="hero-quote">
-      Every job card, scan, check, and capture<br>
-      you enter today becomes the <span class="brand">record</span><br>
-      the factory runs on tomorrow.
-      <small>CTP Job Cards — Floor Onboarding · Transparency &amp; How We Work</small>
+    <div class="picker-wrap">
+      <div class="picker-title">CTP Job Cards — Floor Onboarding</div>
+      <p class="picker-sub">Tick every <strong>department in the room</strong>. You get the shared factory spine, then the union of what applies — e.g. Pre Press + Pressroom = one Job Cards lifecycle for both.</p>
+      <div class="dept-grid" id="deptGrid">
+        <label class="dept-check"><input type="checkbox" name="dept" value="pressroom"><span><strong>Pressroom</strong>Operators &amp; technicians · job cards</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="prepress"><span><strong>Pre Press</strong>Job cards · Copper (managers)</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="postpress"><span><strong>Post Press</strong>Job cards</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="ink"><span><strong>Ink Factory</strong>Meters, production, receive, IBC</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="lurgi"><span><strong>Lurgi</strong>Rounds, chemicals, recycling</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="waste"><span><strong>Waste</strong>Schedule, collect, evidence</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="security"><span><strong>Site Security</strong>Gate hub · visitors</span></label>
+        <label class="dept-check"><input type="checkbox" name="dept" value="fleet"><span><strong>Fleet</strong>Reports · daily check</span></label>
+      </div>
+      <label class="mgr-toggle" id="mgrToggleLabel">
+        <input type="checkbox" id="mgrToggle">
+        <span><strong>Managers in the room</strong> — extra escalation &amp; Pulse oversight callouts</span>
+      </label>
+      <div class="picker-actions">
+        <button type="button" class="picker-btn secondary" id="selectAllDepts">Select all departments</button>
+        <button type="button" class="picker-btn secondary" id="factoryOverview">Factory overview (every slide)</button>
+        <button type="button" class="picker-btn" id="startDeck" disabled>Start presentation</button>
+      </div>
+      <p class="picker-sub" style="font-size:1vw; margin-top:0;">Foremen count as operators — same slides, with foreman callouts unless managers are ticked above.</p>
     </div>
   </div>
 </section>
 
-<!-- ============ SLIDE 2 — Roles ============ -->
-<section class="slide">
+<!-- Roles — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">Who Uses the App on the Floor</div>
     <div class="slide-tag">Roles &amp; modules</div>
@@ -496,19 +644,19 @@
   <div class="slide-body">
     <div class="roles" style="grid-template-columns: repeat(3, 1fr);">
       <div class="role-card">
-        <h3>Operator</h3>
+        <h3>Operator (+ Foreman)</h3>
         <div class="who">You run a production machine</div>
-        <div class="what">You <strong>report faults</strong> — create job cards for the technicians.</div>
+        <div class="what">You <strong>report faults</strong> — create job cards for technicians. <strong>Foremen</strong> use the same floor tiles, plus oversight of card quality in their area.</div>
       </div>
       <div class="role-card">
         <h3>Technician</h3>
         <div class="who">Mechanical, Electrical, or both</div>
-        <div class="what">You <strong>receive</strong>, <strong>accept</strong>, and <strong>fix</strong> job cards.</div>
+        <div class="what">You <strong>receive</strong>, <strong>accept</strong>, and <strong>fix</strong> job cards — same app, full lifecycle with operators.</div>
       </div>
       <div class="role-card">
-        <h3>Manager / Foreman</h3>
-        <div class="who">Dept lead on the floor</div>
-        <div class="what">Oversight of jobs and quality — same phone app, more visibility.</div>
+        <h3>Manager</h3>
+        <div class="who">Dept lead on the floor / desk</div>
+        <div class="what">Oversight of jobs and quality — phone for floor visibility; <strong>CTP Pulse</strong> for desk queues.</div>
       </div>
       <div class="role-card">
         <h3>Fleet Reporter</h3>
@@ -526,12 +674,12 @@
         <div class="what">You only see the modules your role unlocks — capture on the phone; managers use Pulse for desk work.</div>
       </div>
     </div>
-    <div class="callout">You only get the tiles <strong>you need</strong>. This deck explains permissions, job cards, and every floor module — so you know what we collect and why.</div>
+    <div class="callout">You only get the tiles <strong>you need</strong>. This path covers permissions, the factory map, and the deep dive for your audience.</div>
   </div>
 </section>
 
-<!-- ============ SLIDE 3 — Getting the app, one-time setup ============ -->
-<section class="slide">
+<!-- Getting the app — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">Getting the App — One-Time Setup</div>
     <div class="slide-tag">5 steps</div>
@@ -578,8 +726,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 4 — Permissions ============ -->
-<section class="slide">
+<!-- Permissions — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">Six Permissions — All Required</div>
     <div class="slide-tag">First time only</div>
@@ -588,7 +736,7 @@
     <div class="perm-grid">
       <div class="perm"><div class="perm-num">1</div><div class="perm-text">
         <h4>Location — "Allow All the Time"</h4>
-        <p>Detects the ~400 m geofence around site. Auto "Arrived On-Site" notifications. Not surveillance.</p>
+        <p>Detects the ~400 m geofence around site (default; site setting can adjust). Auto "Arrived On-Site" notifications. Not surveillance.</p>
       </div></div>
       <div class="perm"><div class="perm-num">2</div><div class="perm-text">
         <h4>Notifications — Allow</h4>
@@ -615,8 +763,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 5 — How notifications work ============ -->
-<section class="slide">
+<!-- How notifications work — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">How a Notification Reaches Your Phone</div>
     <div class="slide-tag">Why battery optimisation matters</div>
@@ -648,8 +796,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 6 — Geofence ============ -->
-<section class="slide">
+<!-- Geofence — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">The Geofence — How We Know You're On Site</div>
     <div class="slide-tag">Automatic</div>
@@ -658,7 +806,7 @@
     <div class="grid-2">
       <div class="card">
         <h3>What it does</h3>
-        <p>An <strong>~400 m boundary</strong> around the site. The moment you cross in: you get <strong>"Arrived On-Site"</strong> and jobs start routing to you.</p>
+        <p>An <strong>~400 m boundary</strong> around the site (default). The moment you cross in: you get <strong>"Arrived On-Site"</strong> and jobs start routing to you.</p>
         <p style="margin-top:1vh;">Cross out: <strong>"Left Site Area"</strong>. Jobs stop routing to you.</p>
         <p style="margin-top:1vh;">All automatic — as long as Location is "Allow All the Time" and battery optimisation is off.</p>
       </div>
@@ -674,8 +822,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 7 — Anatomy of a job card ============ -->
-<section class="slide">
+<!-- Anatomy — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">Anatomy of a Job Card</div>
     <div class="slide-tag demo">▶ LIVE DEMO</div>
@@ -683,7 +831,7 @@
   <div class="slide-body">
     <div class="grid-2">
       <div class="card" style="border-top:4px solid var(--info);">
-        <h3 style="color:var(--info);">When operator creates</h3>
+        <h3 style="color:var(--info);">When operator / foreman creates</h3>
         <ul class="checks" style="margin-top:0.6vh;">
           <li><strong>Department</strong> → <strong>Area</strong> → <strong>Machine</strong> → <strong>Part</strong></li>
           <li><strong>Description</strong> of the fault</li>
@@ -700,12 +848,12 @@
         </ul>
       </div>
     </div>
-    <div class="callout">Dept → Area → Machine → Part is how the system later groups failures. <strong>Notes and Corrective Action</strong> are what teach it cause and cure. Skip a field, pick the wrong machine, or write nothing in Complete — that data is <strong>lost to us forever</strong>.</div>
+    <div class="callout">Both sides need the full picture: operators describe the fault; technicians record cause and cure. <strong>Foremen</strong> — same create path, plus keep an eye on quality of cards from your area. Skip a field or write nothing in Complete — that detail is <strong>lost forever</strong>.</div>
   </div>
 </section>
 
-<!-- ============ SLIDE 8 — Priorities ============ -->
-<section class="slide">
+<!-- Priorities — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">Priorities — Be Honest</div>
     <div class="slide-tag">P1 to P5</div>
@@ -722,8 +870,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 9 — Lifecycle ============ -->
-<section class="slide">
+<!-- Lifecycle — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">The Full Job Card Lifecycle</div>
     <div class="slide-tag demo">▶ LIVE DEMO</div>
@@ -740,15 +888,15 @@
     </div>
     <div class="grid-3" style="margin-top:1vh;">
       <div class="card"><h3>Assign Self</h3><p>You take it. Status flips to In-Progress. Escalation <strong>stops</strong>.</p></div>
-      <div class="card"><h3>Busy</h3><p style="color:var(--p4);">Use it <strong>after hours</strong> — night shifts, weekends.</p><p style="margin-top:0.6vh;">Acknowledges the job when you can't take it. Operator notified. Escalation <strong>stops</strong>. System finds someone else.</p></div>
-      <div class="card"><h3>Dismiss</h3><p>You dismiss the alert. Escalation <strong>continues</strong>. Logged against you.</p></div>
+      <div class="card"><h3>Busy</h3><p style="color:var(--p4);">On the <strong>P5 full-screen alarm</strong>, Busy is offered after hours (nights / weekends). Notification shade still shows Busy on P3–P5.</p><p style="margin-top:0.6vh;">Acknowledges you can't take it. Operator is notified. Escalation <strong>stops</strong> — it does <strong>not</strong> keep chasing someone else.</p></div>
+      <div class="card"><h3>Dismiss</h3><p>You dismiss the alert. Escalation <strong>continues</strong>. Logged against you. No separate push to the operator.</p></div>
     </div>
-    <div class="callout">A closed job <strong>requires</strong> a closure note. It is the maintenance record managers, engineers, and future technicians will rely on.</div>
+    <div class="callout">Operators and technicians both need this spine. A closed job <strong>requires</strong> a closure note — the record managers, engineers, and future technicians rely on.</div>
   </div>
 </section>
 
-<!-- ============ SLIDE 10 — Three notification levels ============ -->
-<section class="slide">
+<!-- Three notification levels — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">Three Notification Levels</div>
     <div class="slide-tag demo">▶ LIVE P5 ON PHONE</div>
@@ -775,8 +923,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 11 — Escalation ============ -->
-<section class="slide">
+<!-- Escalation — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">Escalation — What Happens If You Ignore It</div>
     <div class="slide-tag">4 stages, automatic</div>
@@ -791,16 +939,16 @@
         <tr><td><strong style="color:var(--text-muted);">Stage 4</strong></td><td>60 min after creation</td><td class="no">OFF by default</td><td>Admin-configurable — final tier</td></tr>
       </tbody>
     </table>
-    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 5 minutes</strong> in a Google European region (scheduled cloud job). It does not forget. It does not sleep.</p>
-    <div class="callout">Escalation stops the moment any technician taps <strong>Assign Self</strong> or <strong>Busy</strong>. Dismissing does not stop escalation — it just puts your name on the log.</div>
+    <p style="font-size:1.3vw; color:var(--text-muted);">The escalation engine runs <strong>every 5 minutes</strong>, <strong>24/7</strong> (same cadence overnight). It does not forget. It does not sleep.</p>
+    <div class="callout">Escalation stops the moment any technician taps <strong>Assign Self</strong> or <strong>Busy</strong>. Dismissing does not stop escalation — it just puts your name on the log. <span class="audience-only managers"><strong>Managers:</strong> Stage 1–2 are how unattended faults reach you on site — use Pulse for queues and quality, not paper parallel packs.</span> <span class="audience-only operators"><strong>Foremen:</strong> you may be in Stage 1 for your dept when on site — same phone app.</span></div>
   </div>
 </section>
 
-<!-- ============ SLIDE 12a — Notification matrix: technician side ============ -->
-<section class="slide">
+<!-- Notification matrix — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">What Notifications You Get — Operators &amp; Technicians</div>
-    <div class="slide-tag">From the live code</div>
+    <div class="slide-tag">Both sides of the lifecycle</div>
   </header>
   <div class="slide-body">
     <table>
@@ -812,17 +960,16 @@
         <tr><td><strong>Job Completed</strong> — your reported job closed</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
         <tr><td><strong>Job Updated</strong> — note added, status changed</td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
         <tr><td><strong>Busy response</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
-        <tr><td><strong>Alert Dismissed</strong></td><td class="yes">✓ Normal</td><td class="no">—</td></tr>
-        <tr><td><strong>Job auto-closed</strong> — sat in Monitor too long</td><td class="yes">✓</td><td class="yes">✓ Assignee</td></tr>
+        <tr><td><strong>Dismiss</strong></td><td class="no">— (logged only)</td><td class="no">—</td></tr>
         <tr><td><strong>Arrived On-Site / Left Site Area</strong></td><td class="yes">✓ You</td><td class="yes">✓ You</td></tr>
-        <tr><td><strong>Maintenance-type jobs</strong></td><td colspan="2" class="silent">🔇 Silent — no notifications at any stage</td></tr>
+        <tr><td><strong>Maintenance / building / specialist types</strong></td><td colspan="2" class="silent">🔇 Silent by default — no creation/escalation notify</td></tr>
       </tbody>
     </table>
   </div>
 </section>
 
-<!-- ============ SLIDE 13 — Fleet reporting: 3 steps ============ -->
-<section class="slide">
+<!-- Fleet 3-tap -->
+<section class="slide" data-depts="fleet">
   <header class="slide-header">
     <div class="slide-title">Reporting a Fleet Problem — 3 Taps</div>
     <div class="slide-tag demo">▶ LIVE DEMO</div>
@@ -855,8 +1002,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 14 — Fleet urgency scale ============ -->
-<section class="slide">
+<!-- Fleet urgency -->
+<section class="slide" data-depts="fleet">
   <header class="slide-header">
     <div class="slide-title">How Urgent Is It? — Be Straight</div>
     <div class="slide-tag">Fleet reports</div>
@@ -866,14 +1013,14 @@
       <div class="pri-row p1"><div class="pri-label p1" style="font-size:1.5vw;">Minor</div><div class="pri-text">Small fault — the machine can still be used.</div></div>
       <div class="pri-row p3"><div class="pri-label p3" style="font-size:1.5vw;">Normal</div><div class="pri-text">Needs attention soon — can still work for now.</div></div>
       <div class="pri-row p4"><div class="pri-label p4" style="font-size:1.5vw;">Urgent</div><div class="pri-text">Serious fault — the mechanic should prioritise it.</div></div>
-      <div class="pri-row p5"><div class="pri-label p5" style="font-size:1.35vw;">Out of Service</div><div class="pri-text"><strong>Machine cannot be used until fixed.</strong> Mechanic alerted straight away; machine marked down for everyone.</div></div>
+      <div class="pri-row p5"><div class="pri-label p5" style="font-size:1.35vw;">Out of Service</div><div class="pri-text"><strong>Machine cannot be used until fixed.</strong> Mechanic alerted when on site; machine marked down for everyone.</div></div>
     </div>
-    <div class="callout"><strong>Out of Service</strong> is for "this machine isn't safe or won't run." Use it honestly — it pulls the mechanic immediately and stops anyone else taking the machine.</div>
+    <div class="callout"><strong>Out of Service</strong> is for "this machine isn't safe or won't run." Use it honestly — it pulls the mechanic and stops anyone else taking the machine.</div>
   </div>
 </section>
 
-<!-- ============ SLIDE 15 — Daily check + what happens next ============ -->
-<section class="slide">
+<!-- Daily check -->
+<section class="slide" data-depts="fleet">
   <header class="slide-header">
     <div class="slide-title">The Daily Check &amp; What Happens Next</div>
     <div class="slide-tag">Fleet reports</div>
@@ -895,8 +1042,8 @@
   </div>
 </section>
 
-<!-- ============ MODULES MAP ============ -->
-<section class="slide">
+<!-- Modules map — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">All Floor Modules in One App</div>
     <div class="slide-tag">What you might see</div>
@@ -905,21 +1052,21 @@
     <table>
       <thead><tr><th>Module</th><th>What you do on the phone</th><th>What we collect (why)</th></tr></thead>
       <tbody>
-        <tr><td class="role">Job Cards</td><td>Create, assign, close faults</td><td>Machine, priority, who fixed it, notes — so faults are not lost</td></tr>
+        <tr><td class="role">Job Cards</td><td>Operators report/create; technicians assign &amp; close</td><td>Machine, priority, who fixed it, notes — so faults are not lost</td></tr>
         <tr><td class="role">Fleet</td><td>Problem report + daily safety check</td><td>Asset, urgency, hour meter, photos — machine logbook</td></tr>
         <tr><td class="role">Site Security</td><td>Visitor / contractor / company car in-out</td><td>Who is on site, when, vehicle details — gate record (not job cards for guards)</td></tr>
         <tr><td class="role">Waste</td><td>Schedule / collect / evidence (when enabled)</td><td>Load, weight evidence, photos — recovery trail for the desk</td></tr>
-        <tr><td class="role">Ink Factory</td><td>Meters, production, receive, IBC</td><td>Quantities and times — live stock trail for the management board</td></tr>
-        <tr><td class="role">Lurgi</td><td>Morning round, chemicals, recycling</td><td>Readings and entries for department visibility (when your area is live)</td></tr>
-        <tr><td class="role">Copper</td><td>Sort / reuse / sell (Pre Press)</td><td>Stock staged into waste for removal tracking</td></tr>
+        <tr><td class="role">Ink Factory</td><td>Meters, production, receive, IBC, tank dips</td><td>Quantities and times — live stock trail for the management board</td></tr>
+        <tr><td class="role">Lurgi</td><td>Section rounds, chemicals, recycling (live for Lurgi)</td><td>Readings and entries for department visibility</td></tr>
+        <tr><td class="role">Copper</td><td>Sort / reuse / sell (Pre Press managers)</td><td>Stock staged into waste for removal tracking</td></tr>
       </tbody>
     </table>
-    <div class="callout">Managers use <strong>CTP Pulse</strong> (web) for desk queues and oversight. Floor capture stays on the phone. You are not asked for data without a job to do.</div>
+    <div class="callout">Managers use <strong>CTP Pulse</strong> (web) for desk queues and oversight. Floor capture stays on the phone. You are not asked for data without a job to do. <span class="audience-only operators"><strong>Foremen:</strong> help your area keep reporting accurate — wrong machines and fake P5s hurt everyone.</span></div>
   </div>
 </section>
 
-<!-- ============ INK ============ -->
-<section class="slide">
+<!-- Ink -->
+<section class="slide" data-depts="ink">
   <header class="slide-header">
     <div class="slide-title">Ink Factory — Floor Capture</div>
     <div class="slide-tag">Module</div>
@@ -928,19 +1075,19 @@
     <div class="grid-2">
       <div class="card">
         <h3>What you capture</h3>
-        <p>Production runs · daily meter readings · receive local / IBC · delivery-note photos · IBC consume · toloul recovery where used.</p>
+        <p>Production runs · daily meter readings · receive local / IBC · delivery-note photos · IBC consume · tank %full / dips · toloul recovery where used.</p>
       </div>
       <div class="card">
         <h3>What happens next</h3>
-        <p>Managers review stock and close periods on <strong>Pulse</strong>. Floor enters <strong>facts</strong> (kg, litres, IBC ids) — quantities and times only on the phone.</p>
+        <p>Managers review stock, ordering, and close periods on <strong>Pulse</strong>. Floor enters <strong>facts</strong> (kg, litres, IBC ids) — quantities and times on the phone.</p>
       </div>
     </div>
-    <div class="callout">Accurate meters and receives protect stock truth. The system dual-runs against the old pack so numbers can be trusted.</div>
+    <div class="callout">Accurate meters and receives protect stock truth for the period on Pulse. Bad numbers on the floor become bad decisions on the board.</div>
   </div>
 </section>
 
-<!-- ============ WASTE ============ -->
-<section class="slide">
+<!-- Waste -->
+<section class="slide" data-depts="waste">
   <header class="slide-header">
     <div class="slide-title">Waste — Floor Capture</div>
     <div class="slide-tag">Module</div>
@@ -951,12 +1098,12 @@
       <div class="step"><div class="step-n">2</div><div class="step-text"><h4>Evidence</h4><p>Photos, signature, paper ref where required — so the desk can finish weighbridge and load review.</p></div></div>
       <div class="step"><div class="step-n">3</div><div class="step-text"><h4>Stock link</h4><p>Pick stock when the load uses on-site pools (including Copper sell stock where applicable).</p></div></div>
     </div>
-    <div class="callout">Weighbridge and load approval are <strong>desk work on Pulse</strong> — not on the phone. Guard floor capture is rolling out with devices; managers already process live.</div>
+    <div class="callout">Weighbridge and load approval are <strong>desk work on Pulse</strong> — not on the phone. Guard floor capture is live on dedicated devices where rolled out; managers already process on Pulse.</div>
   </div>
 </section>
 
-<!-- ============ SECURITY ============ -->
-<section class="slide">
+<!-- Security -->
+<section class="slide" data-depts="security">
   <header class="slide-header">
     <div class="slide-title">Site Security — Gate Floor</div>
     <div class="slide-tag">Module</div>
@@ -976,8 +1123,8 @@
   </div>
 </section>
 
-<!-- ============ LURGI + COPPER ============ -->
-<section class="slide">
+<!-- Lurgi + Copper -->
+<section class="slide" data-depts="lurgi,copper">
   <header class="slide-header">
     <div class="slide-title">Lurgi &amp; Copper — Floor Capture</div>
     <div class="slide-tag">Modules</div>
@@ -986,20 +1133,19 @@
     <div class="grid-2">
       <div class="card">
         <h3>Lurgi</h3>
-        <p>Morning round sections · chemicals multi-entry · recycling multi-run · recovery list (view). Used when your department is rolled on and data entry is live.</p>
-        <p style="margin-top:1vh; color:var(--text-muted);">Managers see period views on Pulse — same count window as ink where shared.</p>
+        <p><strong>Live for Lurgi department.</strong> Section walk · Overhead Tank · Daily Readings · chemicals multi-entry · recycling multi-run · recovery list (view). Soft-void and period views on Pulse.</p>
       </div>
       <div class="card">
-        <h3>Copper (Pre Press)</h3>
-        <p>Sort · reuse · sell stock. Stages into waste pools for Security/Waste removal. No parallel paper sale book as the master.</p>
+        <h3>Copper (Pre Press managers)</h3>
+        <p>Sort · reuse · sell stock — <strong>admin or Pre Press manager</strong> only (not every Pre Press operator). Stages into waste pools for Security/Waste removal.</p>
       </div>
     </div>
     <div class="callout">If you do not see a tile, your role does not use that module yet — that is intentional, not a broken install.</div>
   </div>
 </section>
 
-<!-- ============ SLIDE 13 — Accountability ============ -->
-<section class="slide">
+<!-- Accountability — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">Accountability — Everything Is Logged</div>
     <div class="slide-tag demo">▶ LIVE FIRESTORE BACKEND</div>
@@ -1020,8 +1166,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 14 — Closure notes / the pitch ============ -->
-<section class="slide">
+<!-- Closure notes — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">Your Closure Notes Are the Data</div>
     <div class="slide-tag">The buy-in</div>
@@ -1051,36 +1197,36 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 15 — Three payoffs ============ -->
-<section class="slide">
+<!-- Payoffs — JC (honest live vs heading) -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
-    <div class="slide-title">Why Accurate Notes Matter — 3 Payoffs</div>
-    <div class="slide-tag">Preventive Maintenance</div>
+    <div class="slide-title">Why Accurate Notes Matter</div>
+    <div class="slide-tag">Live today + where we're heading</div>
   </header>
   <div class="slide-body">
     <div class="grid-3">
       <div class="card">
-        <h3>1. AI uses your notes as evidence</h3>
-        <p>When another tech opens a job on the same machine + part, the system pulls <strong>your closure note</strong> and shows: <em>"Last time this fault was fixed, here's exactly what was done."</em></p>
-        <p style="margin-top:1vh;">"Fixed it" = they get nothing. Real detail = head start of hours.</p>
+        <h3>1. Live — similar jobs</h3>
+        <p>When someone opens a job on the same machine / part, the app can surface <strong>related past jobs</strong> so the next tech starts with real history — not guesswork.</p>
+        <p style="margin-top:1vh;">"Fixed it" = they get nothing useful. Real detail = a head start.</p>
       </div>
       <div class="card">
-        <h3>2. Reoccurrence triggers PM</h3>
-        <p>The system counts repeat faults per machine. Cross a threshold and the AI flags it to the workshop manager with a <strong>PM recommendation backed by your notes</strong>.</p>
-        <p style="margin-top:1vh;">Your note becomes the reason the breakdown stops happening.</p>
+        <h3>2. Live — reoccurrence</h3>
+        <p>Pulse tracks repeat faults. Managers can see patterns and decide on PM — your notes are the evidence behind those decisions.</p>
+        <p style="margin-top:1vh;">Automated “AI pushes a PM to the workshop manager” is <strong>not</strong> live yet.</p>
       </div>
       <div class="card">
-        <h3>3. Fault-finding assistant learns from you</h3>
-        <p>The in-app AI chatbot will be trained on closure notes. Tech on the floor asks <em>"What was done last time the FX400 tripped?"</em></p>
-        <p style="margin-top:1vh;">The answer is <strong>your closure note</strong>. Wrote nothing? They get nothing at 3am.</p>
+        <h3>3. Heading — fault assistant</h3>
+        <p>An in-app assistant trained on closure notes is on the roadmap — so a tech can ask what was done last time.</p>
+        <p style="margin-top:1vh;">Wrote nothing? Future tools will have nothing to learn from at 3am.</p>
       </div>
     </div>
-    <div class="callout"><strong>The deal:</strong> 60 extra seconds at closure. In return — fewer 2am callouts, fewer repeat breakdowns, the next tech gets your solution on their screen.</div>
+    <div class="callout"><strong>The deal:</strong> 60 extra seconds at closure. In return — fewer repeat breakdowns, and the next person gets your solution on screen.</div>
   </div>
 </section>
 
-<!-- ============ SLIDE 16 — Dark mode ============ -->
-<section class="slide">
+<!-- Dark mode — JC -->
+<section class="slide" data-depts="jobcards">
   <header class="slide-header">
     <div class="slide-title">Dark Mode &amp; Quality of Life</div>
     <div class="slide-tag demo">▶ FLIP IT LIVE</div>
@@ -1094,8 +1240,8 @@
   </div>
 </section>
 
-<!-- ============ SLIDE 17 — Behind the scenes ============ -->
-<section class="slide">
+<!-- Behind the scenes — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">Behind the Scenes</div>
     <div class="slide-tag">By the numbers</div>
@@ -1103,23 +1249,23 @@
   <div class="slide-body">
     <div class="stats">
       <div class="stat"><div class="n">~179k</div><div class="l">Lines of code</div></div>
-      <div class="stat"><div class="n">~908 h</div><div class="l">Engaged development time</div></div>
-      <div class="stat"><div class="n">5.7</div><div class="l">FTE-months of work</div></div>
+      <div class="stat"><div class="n">~985 h</div><div class="l">Engaged development time</div></div>
+      <div class="stat"><div class="n">6.2</div><div class="l">FTE-months of work</div></div>
       <div class="stat"><div class="n">7</div><div class="l">Modules in one app</div></div>
-      <div class="stat"><div class="n">~285 h</div><div class="l">In work hours (07:30–16:00)</div></div>
-      <div class="stat"><div class="n">~623 h</div><div class="l">Outside work hours + weekends</div></div>
+      <div class="stat"><div class="n">~298 h</div><div class="l">In work hours (07:30–16:00)</div></div>
+      <div class="stat"><div class="n">~687 h</div><div class="l">Outside work hours + weekends</div></div>
     </div>
     <ul class="checks">
       <li><strong>Lines of code</strong> (~179,000): mobile app, Pulse board, Cloud Functions, and rules — counted from the live source trees (July 2026).</li>
-      <li><strong>Time spent</strong> (~908 engaged hours / 5.7 FTE-months over ~101 active days, Apr–Jul 2026): design and build of this system from the development time record. Tools are merged into one timeline so simultaneous work is not double-counted. Gaps over 60 minutes start a new session; each session includes 15 minutes setup.</li>
-      <li>Those hours are <strong>development only</strong> (coding, planning, shipping). Time on the floor explaining the app and onboarding people is <strong>extra</strong> — not in the 908 h.</li>
+      <li><strong>Time spent</strong> (~985 engaged hours / 6.2 FTE-months over ~110 active days, Apr–Jul 2026): design and build from the development time record. Tools are merged into one timeline so simultaneous work is not double-counted. Gaps over 60 minutes start a new session; each session includes 15 minutes setup.</li>
+      <li>Those hours are <strong>development only</strong> (coding, planning, shipping). Time on the floor explaining the app and onboarding people is <strong>extra</strong> — not in the 985 h.</li>
       <li>Live data sits in Google Cloud in <strong>Johannesburg</strong>. Scheduled jobs (escalation timers) run from a European Google region. Photos, notes, and job cards stay in the cloud with redundancy — the phone is not the only copy.</li>
     </ul>
   </div>
 </section>
 
-<!-- ============ SLIDE 18 — Three asks ============ -->
-<section class="slide">
+<!-- Three asks — spine -->
+<section class="slide" data-depts="core">
   <header class="slide-header">
     <div class="slide-title">Three Asks — Starting Tomorrow</div>
     <div class="slide-tag">The close</div>
@@ -1128,7 +1274,7 @@
     <div class="asks">
       <div class="ask"><div class="ask-n">1</div><div class="ask-text"><strong>Grant every permission.</strong> All six. No exceptions — they exist so critical work reaches you.</div></div>
       <div class="ask"><div class="ask-n">2</div><div class="ask-text"><strong>Use your tiles.</strong> Job card, fleet check, gate scan, ink meter, waste load — capture it on the app, not only on paper.</div></div>
-      <div class="ask"><div class="ask-n">3</div><div class="ask-text"><strong>Write notes like the next person needs them.</strong> Closure detail, report detail — that is the factory record.</div></div>
+      <div class="ask"><div class="ask-n">3</div><div class="ask-text"><strong>Write notes like the next person needs them.</strong> Closure detail, report detail — that is the factory record. <span class="audience-only operators">Foremen: keep your area honest on P5s and machine picks.</span></div></div>
     </div>
     <div class="callout" style="margin-top:2vh; text-align:center;">Garbage in, garbage out. <strong>Truth in</strong> — and the workshop starts to feel different.</div>
   </div>
@@ -1137,46 +1283,235 @@
 </div><!-- /deck -->
 
 <div class="deck-footer">
-  <div class="nav-hint"><kbd>←</kbd> <kbd>→</kbd> navigate · <kbd>F</kbd> fullscreen · <kbd>Esc</kbd> exit</div>
+  <div class="nav-hint"><kbd>←</kbd> <kbd>→</kbd> navigate · <kbd>F</kbd> fullscreen · <kbd>Home</kbd> departments · <button type="button" id="changeAudience">Change selection</button></div>
   <div id="counter">1 / 1</div>
 </div>
 <div class="progress-bar" id="progress" style="width:5%"></div>
 
 <script>
-  const slides = document.querySelectorAll('.slide');
+  const JC_DEPTS = ['pressroom', 'prepress', 'postpress'];
+  const DEPT_LABELS = {
+    pressroom: 'Pressroom',
+    prepress: 'Pre Press',
+    postpress: 'Post Press',
+    ink: 'Ink',
+    lurgi: 'Lurgi',
+    waste: 'Waste',
+    security: 'Security',
+    fleet: 'Fleet',
+  };
+
+  const STORAGE_KEY = 'ctpFloorOnboardingSelection';
+  const allSlides = Array.from(document.querySelectorAll('.slide'));
   const counter = document.getElementById('counter');
   const progress = document.getElementById('progress');
+  const changeBtn = document.getElementById('changeAudience');
+  const startBtn = document.getElementById('startDeck');
+  const mgrToggle = document.getElementById('mgrToggle');
+  const deptInputs = () => Array.from(document.querySelectorAll('input[name="dept"]'));
+
+  let selectedDepts = [];
+  let factoryOverview = false;
+  let managersPresent = false;
+  let presentationStarted = false;
+  let activeSlides = [];
   let i = 0;
 
-  function show(n) {
-    i = Math.max(0, Math.min(slides.length - 1, n));
-    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
-    counter.textContent = (i + 1) + ' / ' + slides.length;
-    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+  function parseDeptTags(el) {
+    return (el.getAttribute('data-depts') || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
+  function deptTagMatches(tag, selected) {
+    if (tag === 'jobcards') return selected.some((d) => JC_DEPTS.includes(d));
+    if (tag === 'copper') return selected.includes('prepress');
+    return selected.includes(tag);
+  }
+
+  function slideIncluded(tags, selected, overview) {
+    if (tags.includes('picker')) return false;
+    if (overview) return true;
+    if (tags.includes('core')) return true;
+    return tags.some((tag) => deptTagMatches(tag, selected));
+  }
+
+  function rebuildActive() {
+    const picker = allSlides.find((s) => parseDeptTags(s).includes('picker'));
+    if (!presentationStarted) {
+      activeSlides = picker ? [picker] : [];
+      return;
+    }
+    const rest = allSlides.filter((s) => {
+      const tags = parseDeptTags(s);
+      if (tags.includes('picker')) return false;
+      return slideIncluded(tags, selectedDepts, factoryOverview);
+    });
+    activeSlides = picker ? [picker, ...rest] : rest;
+  }
+
+  function selectionLabel() {
+    if (factoryOverview) return 'Factory overview';
+    if (!selectedDepts.length) return 'Select departments';
+    return selectedDepts.map((d) => DEPT_LABELS[d] || d).join(' + ');
+  }
+
+  function syncBodyManagers() {
+    if (managersPresent) document.body.setAttribute('data-managers', '1');
+    else document.body.removeAttribute('data-managers');
+  }
+
+  function updateStartButton() {
+    const anyDept = deptInputs().some((el) => el.checked);
+    startBtn.disabled = !anyDept;
+  }
+
+  function readPicker() {
+    selectedDepts = deptInputs().filter((el) => el.checked).map((el) => el.value);
+    managersPresent = mgrToggle.checked;
+    syncBodyManagers();
+  }
+
+  function saveSelection() {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+        depts: selectedDepts,
+        managers: managersPresent,
+        overview: factoryOverview,
+        started: presentationStarted,
+      }));
+    } catch (_) {}
+  }
+
+  function restorePickerFromState() {
+    deptInputs().forEach((el) => {
+      el.checked = selectedDepts.includes(el.value);
+    });
+    mgrToggle.checked = managersPresent;
+    syncBodyManagers();
+    updateStartButton();
+  }
+
+  function show(n) {
+    if (!activeSlides.length) rebuildActive();
+    i = Math.max(0, Math.min(activeSlides.length - 1, n));
+    allSlides.forEach((s) => s.classList.remove('active'));
+    activeSlides[i].classList.add('active');
+    const onPicker = parseDeptTags(activeSlides[i]).includes('picker');
+    counter.textContent = presentationStarted && !onPicker
+      ? selectionLabel() + ' · ' + (i) + ' / ' + (activeSlides.length - 1)
+      : (i + 1) + ' / ' + activeSlides.length;
+    progress.style.width = ((i + 1) / activeSlides.length * 100) + '%';
+    changeBtn.style.display = presentationStarted ? 'inline-block' : 'none';
+  }
+
+  function startPresentation(overview) {
+    readPicker();
+    if (!overview && !selectedDepts.length) return;
+    factoryOverview = !!overview;
+    if (overview) {
+      selectedDepts = deptInputs().map((el) => el.value);
+      deptInputs().forEach((el) => { el.checked = true; });
+    }
+    presentationStarted = true;
+    saveSelection();
+    rebuildActive();
+    show(activeSlides.length > 1 ? 1 : 0);
+  }
+
+  function resetSelection() {
+    presentationStarted = false;
+    factoryOverview = false;
+    readPicker();
+    saveSelection();
+    rebuildActive();
+    show(0);
+  }
+
+  deptInputs().forEach((el) => el.addEventListener('change', () => {
+    factoryOverview = false;
+    updateStartButton();
+  }));
+  mgrToggle.addEventListener('change', () => {
+    managersPresent = mgrToggle.checked;
+    syncBodyManagers();
+  });
+
+  document.getElementById('selectAllDepts').addEventListener('click', (e) => {
+    e.stopPropagation();
+    deptInputs().forEach((el) => { el.checked = true; });
+    factoryOverview = false;
+    updateStartButton();
+  });
+
+  document.getElementById('factoryOverview').addEventListener('click', (e) => {
+    e.stopPropagation();
+    startPresentation(true);
+  });
+
+  startBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startPresentation(false);
+  });
+
+  changeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetSelection();
+  });
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { show(i + 1); e.preventDefault(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(i - 1); e.preventDefault(); }
-    else if (e.key === 'Home') { show(0); }
-    else if (e.key === 'End') { show(slides.length - 1); }
-    else if (e.key === 'f' || e.key === 'F') {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+      if (!presentationStarted && activeSlides.length === 1) return;
+      show(i + 1);
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      show(i - 1);
+      e.preventDefault();
+    } else if (e.key === 'Home') {
+      resetSelection();
+      e.preventDefault();
+    } else if (e.key === 'End') {
+      show(activeSlides.length - 1);
+      e.preventDefault();
+    } else if (e.key === 'f' || e.key === 'F') {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen();
       else document.exitFullscreen();
-    }
-    else if (/^[0-9]$/.test(e.key)) {
-      const n = parseInt(e.key);
-      if (n === 0) show(9);
-      else show(n - 1);
     }
   });
 
   document.addEventListener('click', (e) => {
-    if (e.target.closest('a,button,kbd')) return;
+    if (e.target.closest('a,button,kbd,label,.dept-check,.mgr-toggle,#deptGrid')) return;
+    if (!presentationStarted) return;
     show(i + 1);
   });
 
-  show(0);
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      selectedDepts = Array.isArray(saved.depts) ? saved.depts : [];
+      managersPresent = !!saved.managers;
+      factoryOverview = !!saved.overview;
+      presentationStarted = !!saved.started;
+      restorePickerFromState();
+      if (presentationStarted) {
+        rebuildActive();
+        show(activeSlides.length > 1 ? 1 : 0);
+      } else {
+        rebuildActive();
+        show(0);
+      }
+    } else {
+      updateStartButton();
+      rebuildActive();
+      show(0);
+    }
+  } catch (_) {
+    updateStartButton();
+    rebuildActive();
+    show(0);
+  }
 </script>
 </body>
 </html>
