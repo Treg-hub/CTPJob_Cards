@@ -78,14 +78,46 @@ Always keep **permissions** and **geofence transparency** — never soft-skip th
 
 | Fact | Value (through 2026-07-27) |
 |------|----------------------------|
-| Lines of code | **~179,000** (mobile + Pulse + functions + rules) |
+| **Lines we wrote** (first-party authored) | **~228,000** — product + tests + map/docs |
+| **Runs in production** | **~179,000** — see breakdown below |
 | Engaged development time | **~985 hours** |
 | FTE-months | **~6.2** |
 | In work hours | **~298 h** (07:30–16:00 weekdays) |
 | Outside work hours | **~687 h** (evenings + weekends) |
 | Active days | **110** (2026-04-07 → 2026-07-27) |
 
-Source: Time Review `collect_all.json` / Firestore `time_review/current` + source-tree line count (not double-counted).
+Say out loud: *“About **228 thousand lines** of our own work went into this — and about **179 thousand** of that is what runs on your phones, Pulse, and the cloud every day.”*
+
+Source: Time Review + monorepo `tools/count-shipped-loc.ps1` (hours not double-counted).
+
+### ~179k — runs in production
+
+| Component | ~lines |
+|-----------|-------:|
+| Mobile app (`lib/` Dart) | 97,830 |
+| Job Cards Cloud Functions (JS) | 3,338 |
+| CTP Pulse (`src`, excl. tests) | 66,503 |
+| wastetrack-overtime CF (`src`) | 5,342 |
+| `shared-ts` contracts | 227 |
+| Firestore + Storage rules | 1,775 |
+| APK landing page | 1,127 |
+| Android native (`main/`) | 2,420 |
+| **Total** | **~179,000** |
+
+### ~228k — authored beyond runtime (included in headline)
+
+| Component | ~lines |
+|-----------|-------:|
+| Mobile unit tests | 7,877 |
+| Firebase rules tests | 5,106 |
+| Pulse tests in `src` | ~4,400 |
+| Mobile presentation + `docs/` | 8,791 |
+| Components + monorepo `docs/` | 20,205 |
+| Canvases map | 4,123 |
+| `tools/` | 889 |
+| **Extra (approx.)** | **~49,000** |
+
+Recount: `pwsh tools/count-shipped-loc.ps1` from monorepo root.
 
 ---
 
