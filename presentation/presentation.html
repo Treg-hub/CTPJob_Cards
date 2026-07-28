@@ -1248,15 +1248,16 @@
   </header>
   <div class="slide-body">
     <div class="stats">
-      <div class="stat"><div class="n">~179k</div><div class="l">Lines of code</div></div>
+      <div class="stat"><div class="n">~228k</div><div class="l">Lines we wrote</div></div>
+      <div class="stat"><div class="n">~179k</div><div class="l">Runs in production</div></div>
       <div class="stat"><div class="n">~985 h</div><div class="l">Engaged development time</div></div>
       <div class="stat"><div class="n">6.2</div><div class="l">FTE-months of work</div></div>
-      <div class="stat"><div class="n">7</div><div class="l">Modules in one app</div></div>
       <div class="stat"><div class="n">~298 h</div><div class="l">In work hours (07:30–16:00)</div></div>
       <div class="stat"><div class="n">~687 h</div><div class="l">Outside work hours + weekends</div></div>
     </div>
     <ul class="checks">
-      <li><strong>Lines of code</strong> (~179,000): mobile app, Pulse board, Cloud Functions, and rules — counted from the live source trees (July 2026).</li>
+      <li><strong>~228,000 first-party lines we wrote</strong> (Jul 2026): everything we created to build Job Cards + Pulse — product code, tests, architecture map (Components/Canvases), docs, and this deck. Excludes <code>node_modules</code>, lockfiles, and generated build output — not third-party libraries.</li>
+      <li><strong>~179,000 of that runs in production</strong> every day: mobile app, Android shell, both Cloud Function codebases, Pulse, rules, landing, and shared contracts. The rest is tests and documentation that keep the system trustworthy.</li>
       <li><strong>Time spent</strong> (~985 engaged hours / 6.2 FTE-months over ~110 active days, Apr–Jul 2026): design and build from the development time record. Tools are merged into one timeline so simultaneous work is not double-counted. Gaps over 60 minutes start a new session; each session includes 15 minutes setup.</li>
       <li>Those hours are <strong>development only</strong> (coding, planning, shipping). Time on the floor explaining the app and onboarding people is <strong>extra</strong> — not in the 985 h.</li>
       <li>Live data sits in Google Cloud in <strong>Johannesburg</strong>. Scheduled jobs (escalation timers) run from a European Google region. Photos, notes, and job cards stay in the cloud with redundancy — the phone is not the only copy.</li>
