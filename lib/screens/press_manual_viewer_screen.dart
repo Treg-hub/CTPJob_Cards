@@ -7,6 +7,7 @@ import '../models/press_manual_entry.dart';
 import '../models/press_manuals_access_settings.dart';
 import '../services/press_manuals_access_service.dart';
 import '../services/secure_screen_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
 import '../widgets/ctp_app_bar.dart';
@@ -94,33 +95,36 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
     return count;
   }
 
-  /// Highlight matches for find-in-page (still not selectable for copy-out).
   String _highlightedMarkdown(String body, String q) {
     if (q.trim().isEmpty) return body;
-    // Markdown-safe-ish: wrap matches in bold+underline via HTML not available;
-    // use a simple marker the user can see — replace case-insensitively.
     final re = RegExp(RegExp.escape(q.trim()), caseSensitive: false);
     return body.replaceAllMapped(re, (m) => '**⟦${m[0]}⟧**');
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final appColors = Theme.of(context).appColors;
+
     if (!_gateReady) {
-      return const Scaffold(
-        appBar: CtpAppBar(title: 'Press manuals'),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: scheme.surface,
+        appBar: const CtpAppBar(title: 'Press manuals'),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (!role_utils.canAccessPressManuals(currentEmployee, _access)) {
       return Scaffold(
+        backgroundColor: scheme.surface,
         appBar: const CtpAppBar(title: 'Press manuals'),
-        body: const Center(
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Text(
               'Access denied. isAdmin, or Pressroom / technicians when enabled '
               'by an admin.',
               textAlign: TextAlign.center,
+              style: TextStyle(color: scheme.onSurface),
             ),
           ),
         ),
@@ -128,16 +132,16 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
     }
 
     final q = _searchCtrl.text;
-    final matches =
-        _markdown == null ? 0 : _matchCount(_markdown!, q);
+    final matches = _markdown == null ? 0 : _matchCount(_markdown!, q);
 
     return Scaffold(
+      backgroundColor: scheme.surface,
       appBar: CtpAppBar(
         title: widget.entry.title,
         actions: [
           IconButton(
             tooltip: 'Find in pack',
-            icon: const Icon(Icons.search),
+            icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () {
               setState(() {
                 _showSearch = !_showSearch;
@@ -150,30 +154,9 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Material(
-            color: const Color(0xFF7F1D1D),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_outline, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'In-app only · Do not share, screenshot for others, or export. '
-                      'CTP confidential.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           if (_showSearch)
             Material(
+              color: scheme.surfaceContainerHighest,
               elevation: 1,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -182,10 +165,14 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
                     Expanded(
                       child: TextField(
                         controller: _searchCtrl,
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: scheme.onSurface),
+                        decoration: InputDecoration(
                           hintText: 'Find text in this pack…',
+                          hintStyle: TextStyle(color: appColors.textMuted),
                           isDense: true,
-                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: appColors.inputFill,
+                          border: const OutlineInputBorder(),
                         ),
                         onChanged: (_) => setState(() {}),
                       ),
@@ -196,7 +183,9 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
                         child: Text(
                           matches == 0 ? 'No matches' : '$matches match(es)',
                           style: TextStyle(
-                            color: matches == 0 ? Colors.red : Colors.green.shade800,
+                            color: matches == 0
+                                ? scheme.error
+                                : scheme.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -205,13 +194,18 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
                 ),
               ),
             ),
-          Expanded(child: _buildBody(context, q)),
+          Expanded(child: _buildBody(context, q, scheme, appColors)),
         ],
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, String q) {
+  Widget _buildBody(
+    BuildContext context,
+    String q,
+    ColorScheme scheme,
+    AppColors appColors,
+  ) {
     if (_error != null) {
       return Center(
         child: Padding(
@@ -219,17 +213,20 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              Icon(Icons.error_outline, size: 48, color: scheme.error),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 "Couldn't load this pack.",
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 _error.toString(),
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: appColors.textMuted),
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -253,6 +250,11 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
     }
 
     final data = _highlightedMarkdown(_markdown!, q);
+    final onSurf = scheme.onSurface;
+    final muted = appColors.textMuted;
+    final accent = scheme.brightness == Brightness.dark
+        ? const Color(0xFF5EEAD4)
+        : const Color(0xFF0F766E);
 
     return Markdown(
       controller: _scrollCtrl,
@@ -261,29 +263,49 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
       selectable: false,
       onTapLink: (text, href, title) {},
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-        h1: Theme.of(context)
-            .textTheme
-            .headlineSmall
-            ?.copyWith(fontWeight: FontWeight.bold),
-        h2: Theme.of(context)
-            .textTheme
-            .titleLarge
-            ?.copyWith(fontWeight: FontWeight.bold),
-        h3: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.bold),
-        p: Theme.of(context).textTheme.bodyMedium,
+        h1: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: onSurf,
+            ),
+        h2: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: onSurf,
+            ),
+        h3: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: onSurf,
+            ),
+        p: Theme.of(context).textTheme.bodyMedium?.copyWith(color: onSurf),
+        listBullet: TextStyle(color: onSurf),
+        strong: TextStyle(fontWeight: FontWeight.bold, color: onSurf),
+        em: TextStyle(fontStyle: FontStyle.italic, color: onSurf),
+        a: TextStyle(color: scheme.primary),
+        tableBody: TextStyle(color: onSurf),
+        tableHead: TextStyle(fontWeight: FontWeight.bold, color: onSurf),
+        tableBorder: TableBorder.all(color: scheme.outlineVariant),
+        tableCellsPadding: const EdgeInsets.all(6),
         blockquoteDecoration: BoxDecoration(
-          color: const Color(0xFFFFF3E6),
-          border: const Border(
-            left: BorderSide(color: Color(0xFF0D9488), width: 4),
-          ),
+          color: scheme.surfaceContainerHighest,
+          border: Border(left: BorderSide(color: accent, width: 4)),
           borderRadius: BorderRadius.circular(4),
         ),
-        tableBorder: TableBorder.all(color: Theme.of(context).dividerColor),
-        tableHead: const TextStyle(fontWeight: FontWeight.bold),
-        tableCellsPadding: const EdgeInsets.all(6),
+        blockquote: TextStyle(color: onSurf),
+        code: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 13,
+          color: onSurf,
+          backgroundColor: scheme.surfaceContainerHighest,
+        ),
+        codeblockPadding: const EdgeInsets.all(12),
+        codeblockDecoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        horizontalRuleDecoration: BoxDecoration(
+          border: Border(top: BorderSide(color: scheme.outlineVariant)),
+        ),
+        // Keep body readable; muted only for secondary if needed.
+        del: TextStyle(color: muted, decoration: TextDecoration.lineThrough),
       ),
     );
   }

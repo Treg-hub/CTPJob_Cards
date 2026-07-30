@@ -102,4 +102,22 @@ void main() {
       expect(pressManualCatalog.where((e) => e.isBundledMarkdown).length, 6);
     });
   });
+
+  group('buildPressManualTabs', () {
+    test('includes Aurora, Badenia, and General', () {
+      final tabs = buildPressManualTabs();
+      final labels = tabs.map((t) => t.label).toList();
+      expect(labels, contains('Aurora'));
+      expect(labels, contains('Badenia'));
+      expect(labels, contains(pressManualGeneralTab));
+      expect(labels.indexOf('Aurora'), lessThan(labels.indexOf('Badenia')));
+    });
+
+    test('tab matching filters by press', () {
+      final aurora = buildPressManualTabs().firstWhere((t) => t.id == 'Aurora');
+      final hits = pressManualCatalog.where(aurora.matches).toList();
+      expect(hits, isNotEmpty);
+      expect(hits.every((e) => e.press == 'Aurora'), isTrue);
+    });
+  });
 }

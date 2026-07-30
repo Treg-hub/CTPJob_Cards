@@ -371,10 +371,88 @@ String pressManualSectionTitle(String section) {
     case 'short_packs':
       return 'Short packs (on device)';
     case 'aurora_oem':
-      return 'Aurora — OEM handbooks (download when opened)';
+      return 'OEM handbooks (download when opened)';
     case 'badenia_oem':
-      return 'Badenia — OEM chapters (download when opened)';
+      return 'OEM chapters (download when opened)';
     default:
+      if (section.endsWith('_oem')) {
+        return 'OEM documents (download when opened)';
+      }
       return section;
   }
+}
+
+/// Preferred tab order for known presses. New equipment appears after these
+/// when present in [pressManualCatalog] (sorted by name).
+const List<String> pressManualPreferredTabOrder = [
+  'Aurora',
+  'Badenia',
+  'Wifag',
+];
+
+/// Label for cross-press docs (`press == 'All'`).
+const String pressManualGeneralTab = 'General';
+
+/// One top-level tab in the Press Manuals library.
+class PressManualTab {
+  final String id;
+  final String label;
+
+  const PressManualTab({required this.id, required this.label});
+
+  /// Whether [entry] belongs on this tab.
+  bool matches(PressManualEntry entry) {
+    if (id == pressManualGeneralTab) {
+      return entry.press == 'All' || entry.press.isEmpty;
+    }
+    return entry.press.toLowerCase() == id.toLowerCase();
+  }
+}
+
+/// Builds press tabs from the catalog so new equipment appears automatically.
+List<PressManualTab> buildPressManualTabs([
+  List<PressManualEntry> catalog = pressManualCatalog,
+]) {
+  final presses = <String>{};
+  var hasGeneral = false;
+  for (final e in catalog) {
+    if (e.press == 'All' || e.press.isEmpty) {
+      hasGeneral = true;
+    } else {
+      presses.add(e.press);
+    }
+  }
+
+  final ordered = <String>[];
+  for (final p in pressManualPreferredTabOrder) {
+    if (presses.remove(p)) ordered.add(p);
+  }
+  final rest = presses.toList()..sort();
+  ordered.addAll(rest);
+
+  final tabs = ordered
+      .map((p) => PressManualTab(id: p, label: p))
+      .toList(growable: true);
+  if (hasGeneral) {
+    tabs.add(
+      const PressManualTab(
+        id: pressManualGeneralTab,
+        label: pressManualGeneralTab,
+      ),
+    );
+  }
+  return tabs;
+}
+
+/// Within a press tab, group by section (short packs first, then OEM).
+List<String> pressManualSectionOrderFor(List<PressManualEntry> items) {
+  final seen = <String>{};
+  for (final e in items) {
+    seen.add(e.section);
+  }
+  final order = <String>[];
+  if (seen.remove('short_packs')) order.add('short_packs');
+  final rest = seen.toList()..sort();
+  order.addAll(rest);
+  return order;
 }

@@ -8,6 +8,7 @@ import '../models/press_manual_entry.dart';
 import '../models/press_manuals_access_settings.dart';
 import '../services/press_manuals_access_service.dart';
 import '../services/secure_screen_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/ctp_app_bar.dart';
 
@@ -64,7 +65,6 @@ class _PressManualPdfViewerScreenState
   void _onController() {
     if (!_controller.isReady || _searcher != null) return;
     final searcher = PdfTextSearcher(_controller);
-    // pdfrx PdfTextSearcher.addListener returns an unsubscribe callback.
     _unsubSearcher = searcher.addListener(_onSearchChanged);
     _searcher = searcher;
     if (mounted) setState(() => _ready = true);
@@ -110,28 +110,39 @@ class _PressManualPdfViewerScreenState
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final appColors = Theme.of(context).appColors;
+
     if (!_gateReady) {
-      return const Scaffold(
-        appBar: CtpAppBar(title: 'Press manuals'),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: scheme.surface,
+        appBar: const CtpAppBar(title: 'Press manuals'),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (!_allowed) {
       return Scaffold(
+        backgroundColor: scheme.surface,
         appBar: const CtpAppBar(title: 'Press manuals'),
-        body: const Center(child: Text('Access denied.')),
+        body: Center(
+          child: Text(
+            'Access denied.',
+            style: TextStyle(color: scheme.onSurface),
+          ),
+        ),
       );
     }
 
     final searcher = _searcher;
 
     return Scaffold(
+      backgroundColor: scheme.surface,
       appBar: CtpAppBar(
         title: widget.entry.title,
         actions: [
           IconButton(
             tooltip: 'Find in document',
-            icon: const Icon(Icons.search),
+            icon: const Icon(Icons.search, color: Colors.white),
             onPressed: !_ready
                 ? null
                 : () {
@@ -146,30 +157,9 @@ class _PressManualPdfViewerScreenState
       ),
       body: Column(
         children: [
-          Material(
-            color: const Color(0xFF7F1D1D),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_outline, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'In-app only · Downloaded to private app storage · '
-                      'No share/export. CTP confidential.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           if (_showSearch)
             Material(
+              color: scheme.surfaceContainerHighest,
               elevation: 1,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -178,10 +168,14 @@ class _PressManualPdfViewerScreenState
                     Expanded(
                       child: TextField(
                         controller: _searchCtrl,
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: scheme.onSurface),
+                        decoration: InputDecoration(
                           hintText: 'Find text in this PDF…',
+                          hintStyle: TextStyle(color: appColors.textMuted),
                           isDense: true,
-                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: appColors.inputFill,
+                          border: const OutlineInputBorder(),
                         ),
                         textInputAction: TextInputAction.search,
                         onSubmitted: _runSearch,
@@ -191,17 +185,27 @@ class _PressManualPdfViewerScreenState
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.search),
+                      icon: Icon(Icons.search, color: scheme.onSurface),
                       onPressed: () => _runSearch(_searchCtrl.text),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_up),
+                      icon: Icon(
+                        Icons.keyboard_arrow_up,
+                        color: _matchCount == 0
+                            ? scheme.onSurface.withValues(alpha: 0.38)
+                            : scheme.onSurface,
+                      ),
                       onPressed: _matchCount == 0
                           ? null
                           : () => searcher?.goToPrevMatch(),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_down),
+                      icon: Icon(
+                        Icons.keyboard_arrow_down,
+                        color: _matchCount == 0
+                            ? scheme.onSurface.withValues(alpha: 0.38)
+                            : scheme.onSurface,
+                      ),
                       onPressed: _matchCount == 0
                           ? null
                           : () => searcher?.goToNextMatch(),
@@ -209,7 +213,10 @@ class _PressManualPdfViewerScreenState
                     if (_matchCount > 0)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: Text('$_matchIndex/$_matchCount'),
+                        child: Text(
+                          '$_matchIndex/$_matchCount',
+                          style: TextStyle(color: scheme.onSurface),
+                        ),
                       ),
                   ],
                 ),
@@ -220,14 +227,12 @@ class _PressManualPdfViewerScreenState
               widget.file.path,
               controller: _controller,
               params: PdfViewerParams(
-                backgroundColor: Theme.of(context).colorScheme.surface,
+                backgroundColor: scheme.surface,
                 pagePaintCallbacks: [
                   if (searcher != null) searcher.pageTextMatchPaintCallback,
                 ],
                 linkHandlerParams: PdfLinkHandlerParams(
-                  onLinkTap: (_) {
-                    // Swallow external links — stay inside the app.
-                  },
+                  onLinkTap: (_) {},
                 ),
               ),
             ),

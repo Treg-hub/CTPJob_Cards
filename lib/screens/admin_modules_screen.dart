@@ -227,34 +227,56 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
             child: Column(
               children: [
                 SwitchListTile(
-                  secondary: const Icon(Icons.print, color: Color(0xFF0F766E)),
-                  title: const Text('Allow Pressroom'),
+                  secondary: Icon(
+                    Icons.print,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(
+                    'Allow Pressroom',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
                   subtitle: Text(
                     _pressManualsAccessSettings == null
                         ? 'Loading…'
                         : _pressManualsAccessSettings!.allowPressroom
                             ? 'On — Pressroom department can open Press Manuals'
                             : 'Off — Pressroom only if they are isAdmin',
+                    style: TextStyle(
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
                   ),
                   value: _pressManualsAccessSettings?.allowPressroom ?? false,
-                  activeThumbColor: const Color(0xFF0F766E),
+                  activeThumbColor: Theme.of(context).colorScheme.primary,
                   onChanged: _moduleSaving || _pressManualsAccessSettings == null
                       ? null
                       : (v) => _setPressManualsFlag(allowPressroom: v),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 SwitchListTile(
-                  secondary: const Icon(Icons.build_outlined, color: Color(0xFF0F766E)),
-                  title: const Text('Allow Technicians'),
+                  secondary: Icon(
+                    Icons.build_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(
+                    'Allow Technicians',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
                   subtitle: Text(
                     _pressManualsAccessSettings == null
                         ? 'Loading…'
                         : _pressManualsAccessSettings!.allowTechnicians
                             ? 'On — mechanics / electrical / technicians can open'
                             : 'Off — technicians only if they are isAdmin',
+                    style: TextStyle(
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
                   ),
                   value: _pressManualsAccessSettings?.allowTechnicians ?? false,
-                  activeThumbColor: const Color(0xFF0F766E),
+                  activeThumbColor: Theme.of(context).colorScheme.primary,
                   onChanged: _moduleSaving || _pressManualsAccessSettings == null
                       ? null
                       : (v) => _setPressManualsFlag(allowTechnicians: v),
