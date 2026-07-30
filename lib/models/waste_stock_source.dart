@@ -66,3 +66,12 @@ const String kCopperRodsPoolPointerDocId = 'copper_rods';
 
 /// Open copper nuggets sell pool pointer (`waste_stock_pool_pointers/copper_nuggets`).
 const String kCopperNuggetsPoolPointerDocId = 'copper_nuggets';
+
+/// Rods + nuggets must reach this total (kg) before copper waste stock is
+/// visible in Waste (inventory, From stock, ready panel). Staging into pools
+/// may still run below threshold; Waste UI hides it until ready for collection.
+const double kCopperWasteCollectionThresholdKg = 400;
+
+/// Float-safe: total rods+nuggets (or sell mirror) is ready for Waste collection.
+bool copperMeetsWasteCollectionThreshold(double totalKg) =>
+    totalKg + 0.05 >= kCopperWasteCollectionThresholdKg;

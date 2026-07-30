@@ -12,7 +12,7 @@ This guide walks through **mobile field capture** in WasteTrack — recording st
 
 | Role | Typical tasks |
 |------|----------------|
-| **Security Manager** | Browse on-site stock inventory; see **Copper ready to sell**; schedule loads; link stock **on collection day**; begin collections; finish loading |
+| **Security Manager** | Browse on-site stock inventory; see **Copper ready to collect** (when ≥400 kg); schedule loads; link stock **on collection day**; begin collections; finish loading |
 | **Security Guard** | Schedule loads; **begin collections**; link saved stock **at collection** (From stock); items, photos, signature, submit — **does not browse on-site stock inventory** |
 | **Admin** | Same as manager on mobile. **Weighbridge, cost review, reports, and settings** are on **CTP Pulse** only. |
 
@@ -106,15 +106,16 @@ When an ink operator **consumes an IBC** in the Ink Factory app, the system auto
 - **Quantity-only** — weighbridge is skipped; cost review uses **count × rate**.
 - If an ink manager **voids** the consumption, the linked stock item is removed automatically.
 
-### Copper ready to sell (managers & admins only)
+### Copper ready to collect (managers & admins only)
 
-Copper rods and nuggets are tracked in the separate **Copper** module (whitelist staff). The Waste tab shows a **Copper ready to sell** panel for **security managers and admins only** — guards never see this.
+Copper rods and nuggets are tracked in the separate **Copper** module (whitelist staff).
 
-| Stage | What you see |
+| Stage | What happens |
 |-------|----------------|
-| Below **400 kg** total in the copper sell bucket | Panel shows rods/nuggets kg still in the copper module — not yet waste stock |
-| **400 kg or more** | System auto-creates **Copper Waste** on-site stock (Rods and/or Nuggets). Copper module sell bucket resets. Panel shows kg awaiting collection |
-| Collection day | Schedule a **Copper Waste** load (no need to pre-link stock). On collection, tap **From stock** and select the auto-created items |
+| Below **400 kg** total (rods + nuggets) | Metal stays in Copper **To Sell only**. **No** Waste stock docs for Security — nothing copper on Waste home, inventory, or **From stock** |
+| **400 kg or more** | Waste stock pools (Rods / Nuggets) are created or updated to match To Sell. **Inbox + push** to Security managers and factory admins (once per ready period). **Copper ready to collect** panel; stock visible so Security can **schedule collection** |
+| Collection day | Schedule a **Copper Waste** load. Tap **From stock** and link the copper items. Linking **loads** the stock and **removes that kg from Copper To Sell** immediately |
+| Cost complete (Pulse) | Commercial sale is recorded in copper transactions (audit) |
 
 When an admin **approves cost** on Pulse for a Copper Waste load, the commercial sale is recorded in copper transactions automatically.
 
@@ -288,7 +289,7 @@ Leave both off for standard weight-based types.
 **Stock not showing when I select waste types**
 - Paper stock lives under Paper Waste subtypes — select matching chips (e.g. *Reelends*, *Slab Waste*).
 - **IBC Bins** loads: link stock with waste type **IBC Bins**; bins appear after ink operators consume IBCs.
-- **Copper Waste** loads: manager-only stock appears after copper sell total reaches **400 kg**; use **From stock** on collection day.
+- **Copper Waste** loads: copper stock is visible only when rods+nuggets total ≥ **400 kg**; use **From stock** on collection day.
 - Only **on-site** stock appears — items already loaded on another truck are excluded.
 
 **Guard cannot find On-site Stock menu**

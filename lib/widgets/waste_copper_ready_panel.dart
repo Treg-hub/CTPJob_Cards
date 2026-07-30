@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../models/copper_inventory.dart';
 import '../models/waste_stock_item.dart';
+import '../models/waste_stock_source.dart';
 import '../services/copper_service.dart';
 import '../services/waste_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 
-/// Manager-only summary of copper staged for collection (copper module sell
-/// mirrors + on-site copper waste stock pools Security can link to a load).
+/// Manager-only summary of copper ready for Waste collection.
+///
+/// Hidden until rods + nuggets total ≥ [kCopperWasteCollectionThresholdKg]
+/// (inventory sell mirrors and/or on-site copper waste stock pools).
 class WasteCopperReadyPanel extends StatelessWidget {
   const WasteCopperReadyPanel({
     super.key,
@@ -37,28 +40,34 @@ class WasteCopperReadyPanel extends StatelessWidget {
                     i.status == WasteStockStatus.onSite)
                 .toList();
 
-            final pendingInModule = inv == null ? 0.0 : inv.sellKg;
             final rodsPending = inv?.sellRodsKg ?? 0.0;
             final nuggetsPending = inv?.sellNuggetsKg ?? 0.0;
+            // Prefer rods+nuggets split; fall back to sellKg if split not populated.
+            final pendingInModule = inv == null
+                ? 0.0
+                : (rodsPending + nuggetsPending > 0
+                    ? rodsPending + nuggetsPending
+                    : inv.sellKg);
             final onSiteKg = stock.fold<double>(
               0,
               (sum, i) => sum + (i.estimatedWeightKg ?? 0),
             );
 
-            if (pendingInModule <= 0 && onSiteKg <= 0) {
+            // Waste only surfaces copper once total is collection-ready.
+            final readyKg =
+                pendingInModule >= onSiteKg ? pendingInModule : onSiteKg;
+            if (!copperMeetsWasteCollectionThreshold(readyKg)) {
               return const SizedBox.shrink();
             }
 
             final lines = <String>[];
-            if (pendingInModule > 0 || onSiteKg > 0) {
-              final showKg =
-                  pendingInModule > 0 ? pendingInModule : onSiteKg;
-              lines.add(
-                'Staged for collection: ${formatSAWeight(showKg)}'
-                '${rodsPending > 0 || nuggetsPending > 0 ? ' (Rods ${formatSAWeight(rodsPending)} · Nuggets ${formatSAWeight(nuggetsPending)})' : ''}'
-                ' — link from stock when collecting Copper Waste',
-              );
-            }
+            final showKg =
+                pendingInModule > 0 ? pendingInModule : onSiteKg;
+            lines.add(
+              'Ready for collection: ${formatSAWeight(showKg)}'
+              '${rodsPending > 0 || nuggetsPending > 0 ? ' (Rods ${formatSAWeight(rodsPending)} · Nuggets ${formatSAWeight(nuggetsPending)})' : ''}'
+              ' — link From stock when collecting Copper Waste',
+            );
             if (stock.isNotEmpty) {
               lines.add(
                 'On-site waste stock: ${formatSAWeight(onSiteKg)}'

@@ -2402,7 +2402,8 @@ class WasteService {
       }
     }
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return items;
+    // Copper rods+nuggets stay invisible in Waste until total staging kg ≥ 400.
+    return applyCopperWasteVisibilityThreshold(items);
   }
 
   /// Links stock items to a load by updating their status to loaded in a single batch.

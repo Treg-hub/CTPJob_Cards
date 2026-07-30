@@ -116,6 +116,26 @@ bool stockItemIsCopper(WasteStockItem item) {
       isCopperStockFamilyName(item.wasteType);
 }
 
+/// Sum of on-site copper sell-staging stock (rods + nuggets pools).
+double copperStagingOnSiteKg(Iterable<WasteStockItem> items) {
+  var total = 0.0;
+  for (final i in items) {
+    if (!i.source.isCopperSellStaging || i.isDeleted) continue;
+    total += i.estimatedWeightKg ?? 0;
+  }
+  return total;
+}
+
+/// Hide copper sell-staging stock from Waste until rods+nuggets total ≥ 400 kg.
+/// Manual / non-copper stock is unchanged. Call on on-site list snapshots only.
+List<WasteStockItem> applyCopperWasteVisibilityThreshold(
+  List<WasteStockItem> items,
+) {
+  final stagingKg = copperStagingOnSiteKg(items);
+  if (copperMeetsWasteCollectionThreshold(stagingKg)) return items;
+  return items.where((i) => !i.source.isCopperSellStaging).toList();
+}
+
 /// Loads that support linking on-site stock at collection (not only at schedule).
 bool loadCanLinkOnSiteStock(String? mainWasteType, List<WasteType> allTypes) {
   if (mainWasteType == null || mainWasteType.isEmpty) return false;

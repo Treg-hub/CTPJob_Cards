@@ -6,6 +6,18 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-30 — 2.3.0+195 — Job History + copper ready for collection
+
+### What you will notice
+
+- **Job History** is simpler: search and date up top; type, priority, and location filters sit behind one **Filters** button so more of the list fits on screen.
+- Closed jobs show as compact rows (job number, priority, type, closed time, location, short description). Pull down to refresh; scroll down to load more.
+- **Copper for Waste:** metal stays in Copper until rods and nuggets together reach **400 kg**. Then it appears in Waste so Security can schedule a collection.
+- Security managers and factory admins get an **inbox note** when copper is ready for collection (and a push when on site).
+- When Security links copper stock on a load, that weight comes off Copper To Sell.
+
+---
+
 ## 2026-07-30 — 2.3.0+194 — Press manuals on Home
 
 ### What you will notice

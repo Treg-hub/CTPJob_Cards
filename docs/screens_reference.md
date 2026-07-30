@@ -224,22 +224,29 @@ Each row uses the shared **`JobCardTile`** widget (flat card, priority left edge
 
 Searchable archive of all closed job cards with server-side filtering to minimise Firestore read costs. Accessible via the **Job History** quick-action tile on the Home screen.
 
+#### Layout
+
+- **Compact header** — free-text search; **Filters** button (badge when active); **Date** button (preset menu).
+- **Active filter chips** — type / priority / location only when set (clearable).
+- **Dense result rows** — JC# · priority · type · closedAt · path (1 line) · description (1 line). No activity block. Tap → detail.
+- **Infinite scroll** — loads next page near list end (still 50 docs/page). Pull-to-refresh supported.
+
 #### Server-Side Filters (trigger a new Firestore fetch)
 
 | Filter | Options | Notes |
 |--------|---------|-------|
-| Date Range | Last 7 days / Last 30 days / Last 90 days / Custom / All time | Default: Last 30 days |
-| Department | All or specific department chip | Cascading — enables Area when selected |
-| Area | All or specific area chip | Cascading — enables Machine when selected |
-| Machine | All or specific machine chip | — |
+| Date Range | Last 7 days / Last 30 days / Last 90 days / Custom / All time | Default: Last 30 days. Custom opens a date-range picker. |
+| Department | All or specific department | In Filters sheet — cascading Area when selected |
+| Area | All or specific area | Cascading — enables Machine when selected |
+| Machine | All or specific machine | — |
 
-Each filter combination maps to a composite Firestore index. Fetches at most **50 documents per page** ordered by `closedAt` descending. Tap **Load More** for cursor-based pagination.
+Each filter combination maps to a composite Firestore index. Fetches at most **50 documents per page** ordered by `closedAt` descending.
 
 #### Client-Side Refinement (applied to current page, zero additional reads)
 
-- **Type** — Mechanical / Electrical / Mech-Elec / Maintenance chips
-- **Priority** — P1–P5 chips, colour-coded
-- **Free-text search** — searches description, machine, part, notes, operator name, and job card number across the fetched result set
+- **Type** — Mechanical / Electrical / Mech-Elec / Maintenance (Filters sheet)
+- **Priority** — P1–P5, colour-coded (Filters sheet)
+- **Free-text search** — description, machine, part, notes, operator name, corrective action, and job card number across the fetched result set
 
 #### Navigation
 
@@ -579,7 +586,7 @@ Load list is driven by live streams on `watchLoads()` and `watchScheduledLoads()
 - **+ New / Schedule** *(FAB)* — bottom sheet: "Schedule Incoming Load" or "New Load (on the spot)"
 - **Begin Collection** — opens **Waste Begin Collection** for a scheduled load
 - **On-site stock** banner *(manager/admin)* — opens stock inventory
-- **Copper ready to sell** panel *(manager/admin)* — live copper sell bucket + on-site copper waste stock after 400 kg threshold
+- **Copper ready to collect** panel *(manager/admin)* — only when rods+nuggets ≥ **400 kg**; copper stock hidden from inventory / From stock below that
 - **⋮ More actions** — cloud sync retry when offline queue is non-empty (weighbridge/reports/admin removed 2026-06-22)
 - **All / Today / This Week** filter chips — apply to scheduled and recent loads
 
@@ -668,7 +675,7 @@ Full detail view of a single waste load.
 
 `lib/screens/waste_stock_inventory_screen.dart` — **Roles:** Security Manager, Admin *(not Security Guard)*
 
-Lists on-site `waste_stock` items: manual paper stock, auto **IBC Bins** from ink consume (`stock_ibc_{n}`), and auto **Copper Waste** after the 400 kg threshold (`visibility: manager_only`). Guards are directed to link stock at collection instead.
+Lists on-site `waste_stock` items: manual paper stock, auto **IBC Bins** from ink consume (`stock_ibc_{n}`), and auto **Copper Waste** pools (`source: copper_sell`, `visibility: manager_only`) **only when rods+nuggets total ≥ 400 kg**. Below threshold copper staging is hidden. Guards are directed to link stock at collection instead.
 
 ### Waste Queued
 
