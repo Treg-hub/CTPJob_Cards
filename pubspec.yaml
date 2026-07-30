@@ -2,7 +2,7 @@ name: ctp_job_cards
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 2.3.0+193
+version: 2.3.0+194
 environment:
   sdk: '>=3.0.0 <4.0.0'
 
@@ -60,6 +60,7 @@ dependencies:
   crypto: ^3.0.6   # Salted-hash exit code for Kiosk Mode device lockdown
   printing: ^5.14.3
   google_mlkit_text_recognition: ^0.16.0
+  pdfrx: ^2.4.7
 
 dev_dependencies:
   flutter_test:
@@ -92,6 +93,13 @@ flutter:
     - docs/fleet_cost_manager_guide.md
     - docs/security_guard_guide.md
     - docs/security_manager_mobile_guide.md
+    # Pressroom short packs (in-app only; Settings/Home → Press Manuals)
+    - docs/press_manuals/aurora_arl_safety.md
+    - docs/press_manuals/aurora_cps_quick.md
+    - docs/press_manuals/badenia_folder_weekly_walk.md
+    - docs/press_manuals/badenia_lube_rules.md
+    - docs/press_manuals/badenia_safety_loto_basics.md
+    - docs/press_manuals/pressroom_job_card_quality.md
 
 flutter_launcher_icons:
   image_path: "assets/images/logo.png"

@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-07-30 — 2.3.0+194 — Press manuals on Home
+
+### What you will notice
+
+- **Home → Tools → Press Manuals** (when your access allows it): short floor packs stay on the phone; larger OEM handbooks download into the app only when you open them.
+- Search the list by name, and search inside a pack or PDF while reading.
+- Manuals open only inside Job Cards (no share / open-outside-app).
+- Admins can open access for **Pressroom** and/or **technicians** under **Factory Admin → Modules**.
+
+---
+
 ## 2026-07-28 — 2.3.0+193 — Waste home: fuller load lists
 
 ### What you will notice
