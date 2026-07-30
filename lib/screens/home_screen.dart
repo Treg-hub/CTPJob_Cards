@@ -68,7 +68,10 @@ import 'ink_daily_readings_screen.dart';
 import 'lurgi_home_screen.dart';
 import 'security_home_screen.dart';
 import 'press_live_screen.dart';
+import 'press_manuals_screen.dart';
+import '../models/press_manuals_access_settings.dart';
 import '../services/press_live_service.dart';
+import '../services/press_manuals_access_service.dart';
 
 import '../models/fleet_settings.dart';
 import '../models/security_settings.dart';
@@ -154,6 +157,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
   /// Press Live home tile — admin or settings/press_live_access clock list.
   bool _canViewPressLive = false;
+
+  /// Press Manuals — isAdmin + optional flags from settings/press_manuals_access.
+  PressManualsAccessSettings _pressManualsAccess =
+      PressManualsAccessSettings.defaults;
 
   /// When true, first-frame update check ran without employee clock/dept —
   /// re-run channel match once the profile loads (targeted force/soft).
@@ -508,6 +515,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           // If first-frame update check already ran without us, re-match channels.
           _maybeRecheckUpdateForCohort();
           unawaited(_loadPressLiveAccess());
+          unawaited(_loadPressManualsAccess());
         }
       }
 
@@ -606,6 +614,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   static const Color _deptRequestsGroup = Color(0xFFEA580C);
   static const Color _timesheetGroup = Color(0xFF10B981);
   static const Color _pressLiveGroup = Color(0xFF0D9488);
+  /// Press manuals short packs (Pressroom + admin).
+  static const Color _pressManualsGroup = Color(0xFF0F766E);
   static const Color _feedbackGroup = Color(0xFFC026D3);
   // Daily Review (gold) is the separate _DailyReviewTile widget.
   static const double _tileWashAlpha = 0.18;
@@ -782,6 +792,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
       });
     }
+    // Press manuals: isAdmin + optional Pressroom / technicians (admin toggles).
+    if (role_utils.canAccessPressManuals(
+        currentEmployee, _pressManualsAccess)) {
+      tools.add({
+        'title': 'Press Manuals',
+        'icon': Icons.menu_book_outlined,
+        'color': _pressManualsGroup,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PressManualsScreen()),
+            ),
+      });
+    }
     // Dept Requests + All Dept Req stay adjacent in My work / tools.
     // Manager title or admin (rules use position contains manager).
     if (isManager || role_utils.isAdmin(currentEmployee)) {
@@ -930,6 +953,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     }
   }
 
+  Future<void> _loadPressManualsAccess() async {
+    try {
+      final settings = await PressManualsAccessService().getSettings();
+      if (mounted) setState(() => _pressManualsAccess = settings);
+    } catch (e) {
+      debugPrint('Press Manuals access load error: $e');
+      if (mounted) {
+        setState(() => _pressManualsAccess = PressManualsAccessSettings.defaults);
+      }
+    }
+  }
+
   /// Re-runs only the module-settings loads whose FIRST attempt failed
   /// (offline cold start). Without this, a mechanic's Fleet tab or a guard's
   /// Waste/Security hub stayed missing for the whole session. Fired on
@@ -953,6 +988,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _maybeRecheckUpdateForCohort();
     // Re-evaluate after employee is known (initState often ran with null clock).
     unawaited(_loadPressLiveAccess());
+          unawaited(_loadPressManualsAccess());
   }
 
   /// Re-resolve update channels after a deferred employee load so Ink/testers
@@ -1051,6 +1087,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _loadWasteSettings(preferServer: true),
       _loadSecuritySettings(preferServer: true),
       _loadPressLiveAccess(),
+      _loadPressManualsAccess(),
     ]);
     if (!mounted) return;
     _retryFailedModuleSettings();
@@ -1162,6 +1199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadWasteSettings();
     _loadSecuritySettings();
     unawaited(_loadPressLiveAccess());
+          unawaited(_loadPressManualsAccess());
     // Offline cold start: re-attempt any module-settings load that failed
     // the moment connectivity returns (only failed ones — no extra reads).
     _moduleSettingsConnSub =
@@ -1176,6 +1214,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       _previousIsOnSite = realEmployee!.isOnSite;
       _setupEmployeeStream(realEmployee!.clockNo);
       unawaited(_loadPressLiveAccess());
+          unawaited(_loadPressManualsAccess());
     } else {
       _tryLoadCurrentEmployee();
     }

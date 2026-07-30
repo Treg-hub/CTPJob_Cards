@@ -1,6 +1,7 @@
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
 import '../models/job_card.dart';
+import '../models/press_manuals_access_settings.dart';
 import '../models/security_settings.dart';
 import '../models/waste_settings.dart';
 import '../models/work_report_settings.dart';
@@ -418,4 +419,37 @@ bool isInkManager(Employee? employee) {
   if (isAdmin(employee)) return true;
   return isInkUser(employee) &&
       employee.position.toLowerCase().contains('manager');
+}
+
+// =============================================================================
+// PRESS MANUALS (short packs + OEM library)
+// =============================================================================
+
+const String pressroomDepartment = 'Pressroom';
+
+/// Home tile + in-app press manuals library.
+///
+/// Always: dual claim/registry [isAdmin].
+/// Optionally (admin toggles on `settings/press_manuals_access`):
+/// - [allowPressroom] — department Pressroom
+/// - [allowTechnicians] — [UserRole.technician] (any department)
+///
+/// Pass [access] from that settings doc; when null, only isAdmin (safe default).
+bool canAccessPressManuals(
+  Employee? employee, [
+  PressManualsAccessSettings? access,
+]) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  final flags = access ?? PressManualsAccessSettings.defaults;
+  if (flags.allowPressroom &&
+      employee.department.trim().toLowerCase() ==
+          pressroomDepartment.toLowerCase()) {
+    return true;
+  }
+  if (flags.allowTechnicians &&
+      roleFromEmployee(employee) == UserRole.technician) {
+    return true;
+  }
+  return false;
 }

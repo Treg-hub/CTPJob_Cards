@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
@@ -35,6 +36,7 @@ class MainActivity : FlutterActivity() {
     private val JOB_ALERT_CHANNEL = "job_alert_channel"
     private val KIOSK_CHANNEL = "ctp/kiosk"
     private val APK_INSTALL_CHANNEL = "ctp/apk_install"
+    private val SECURE_SCREEN_CHANNEL = "ctp/secure_screen"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -198,6 +200,31 @@ class MainActivity : FlutterActivity() {
                         } catch (e: Exception) {
                             Log.e(TAG, "❌ installApk: ${e.message}")
                             result.error("INSTALL_APK_ERROR", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // ==================== SECURE SCREEN (press manuals etc.) ====================
+        // FLAG_SECURE blocks screenshots / recents bitmap on most Android devices.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SECURE_SCREEN_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setSecure" -> {
+                        val secure = call.argument<Boolean>("secure") ?: false
+                        try {
+                            runOnUiThread {
+                                if (secure) {
+                                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                                } else {
+                                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                                }
+                            }
+                            result.success(null)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ setSecure failed: ${e.message}")
+                            result.error("SECURE_SCREEN_ERROR", e.message, null)
                         }
                     }
                     else -> result.notImplemented()

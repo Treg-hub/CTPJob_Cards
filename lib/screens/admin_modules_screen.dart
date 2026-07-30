@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/fleet_settings.dart';
+import '../models/press_manuals_access_settings.dart';
 import '../services/fleet_service.dart';
+import '../services/press_manuals_access_service.dart';
 import '../services/waste_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/persona_audit.dart';
@@ -21,10 +23,13 @@ class AdminModulesScreen extends StatefulWidget {
 class _AdminModulesScreenState extends State<AdminModulesScreen> {
   final WasteService _wasteService = WasteService();
   final FleetService _fleetService = FleetService();
+  final PressManualsAccessService _pressManualsAccess =
+      PressManualsAccessService();
 
   bool? _wasteEnabled;
   bool? _fleetEnabled;
   FleetSettings? _fleetSettings;
+  PressManualsAccessSettings? _pressManualsAccessSettings;
   bool _moduleSaving = false;
 
   @override
@@ -36,11 +41,18 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
   Future<void> _loadModuleStates() async {
     final wasteOn = await _wasteService.getWasteMasterEnabled();
     final fleetSettings = await _fleetService.getSettings();
+    PressManualsAccessSettings pressManuals;
+    try {
+      pressManuals = await _pressManualsAccess.getSettings();
+    } catch (_) {
+      pressManuals = PressManualsAccessSettings.defaults;
+    }
     if (mounted) {
       setState(() {
         _wasteEnabled = wasteOn;
         _fleetSettings = fleetSettings;
         _fleetEnabled = fleetSettings.fleetEnabled;
+        _pressManualsAccessSettings = pressManuals;
       });
     }
   }
@@ -73,6 +85,35 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
       if (mounted) setState(() => _fleetSettings = updated);
     } catch (_) {
       if (mounted) setState(() => _fleetEnabled = !value);
+    } finally {
+      if (mounted) setState(() => _moduleSaving = false);
+    }
+  }
+
+  Future<void> _setPressManualsFlag({
+    bool? allowPressroom,
+    bool? allowTechnicians,
+  }) async {
+    if (!guardPersonaSubmit(context)) return;
+    final current =
+        _pressManualsAccessSettings ?? PressManualsAccessSettings.defaults;
+    final updated = current.copyWith(
+      allowPressroom: allowPressroom,
+      allowTechnicians: allowTechnicians,
+    );
+    setState(() {
+      _pressManualsAccessSettings = updated;
+      _moduleSaving = true;
+    });
+    try {
+      await _pressManualsAccess.saveSettings(updated);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _pressManualsAccessSettings = current);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save Press Manuals access: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _moduleSaving = false);
     }
@@ -157,6 +198,66 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
                   onChanged: _moduleSaving || _fleetEnabled == null
                       ? null
                       : _setFleetEnabled,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'PRESS MANUALS ACCESS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+              color: muted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'isAdmin always has access. Use these switches to open the Home '
+            '“Press Manuals” library to more people. OEM PDFs still download '
+            'only in-app when allowed by Storage rules.',
+            style: TextStyle(fontSize: 12, color: muted, height: 1.35),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 1,
+            color: Theme.of(context).appColors.cardSurface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.print, color: Color(0xFF0F766E)),
+                  title: const Text('Allow Pressroom'),
+                  subtitle: Text(
+                    _pressManualsAccessSettings == null
+                        ? 'Loading…'
+                        : _pressManualsAccessSettings!.allowPressroom
+                            ? 'On — Pressroom department can open Press Manuals'
+                            : 'Off — Pressroom only if they are isAdmin',
+                  ),
+                  value: _pressManualsAccessSettings?.allowPressroom ?? false,
+                  activeThumbColor: const Color(0xFF0F766E),
+                  onChanged: _moduleSaving || _pressManualsAccessSettings == null
+                      ? null
+                      : (v) => _setPressManualsFlag(allowPressroom: v),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                SwitchListTile(
+                  secondary: const Icon(Icons.build_outlined, color: Color(0xFF0F766E)),
+                  title: const Text('Allow Technicians'),
+                  subtitle: Text(
+                    _pressManualsAccessSettings == null
+                        ? 'Loading…'
+                        : _pressManualsAccessSettings!.allowTechnicians
+                            ? 'On — mechanics / electrical / technicians can open'
+                            : 'Off — technicians only if they are isAdmin',
+                  ),
+                  value: _pressManualsAccessSettings?.allowTechnicians ?? false,
+                  activeThumbColor: const Color(0xFF0F766E),
+                  onChanged: _moduleSaving || _pressManualsAccessSettings == null
+                      ? null
+                      : (v) => _setPressManualsFlag(allowTechnicians: v),
                 ),
               ],
             ),
