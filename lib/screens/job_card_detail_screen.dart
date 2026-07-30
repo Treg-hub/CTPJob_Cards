@@ -92,6 +92,71 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     }
   }
 
+  /// Admin soft-delete — rules require isAdmin claim; hard delete forbidden.
+  Future<void> _confirmSoftDelete(JobCard job) async {
+    if (!isAdmin(currentEmployee) || job.id == null) return;
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Soft-delete job card?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Hide Job #${job.jobCardNumber ?? job.id} from lists and metrics. '
+              'Hard delete is not allowed.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'Reason (optional)',
+                hintText: 'e.g. test card',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+              textCapitalization: TextCapitalization.sentences,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Soft-delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      reasonController.dispose();
+      return;
+    }
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
+    try {
+      await _firestoreService.softDeleteJobCard(
+        jobCardId: job.id!,
+        byClockNo: currentEmployee?.clockNo ?? '',
+        byName: currentEmployee?.name ?? 'Admin',
+        reason: reason.isEmpty ? 'Soft-deleted from mobile (admin)' : reason,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Job #${job.jobCardNumber ?? job.id} soft-deleted')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Soft-delete failed: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   // ==================== NEW TABBED ASSIGNMENT SHEET ====================
   void _toggleAssigneeSelection({
     required List<String> selectedClockNos,
@@ -993,7 +1058,17 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
     const double sectionSpacing = 5.0;
 
     return Scaffold(
-      appBar: const CtpAppBar(title: 'Job Card Details'),
+      appBar: CtpAppBar(
+        title: 'Job Card Details',
+        actions: [
+          if (isAdmin(currentEmployee) && !_currentJobCard.isDeleted)
+            IconButton(
+              tooltip: 'Soft-delete (admin)',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _confirmSoftDelete(_currentJobCard),
+            ),
+        ],
+      ),
       body: StreamBuilder<JobCard>(
         stream: _firestoreService.getJobCardStream(widget.jobCard.id!),
         builder: (context, snapshot) {
@@ -1006,6 +1081,25 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
           _currentJobCard = jobCard;
           return Column(
             children: [
+              if (jobCard.isDeleted)
+                Material(
+                  color: Colors.red.shade800,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Soft-deleted — hidden from lists and metrics',
+                            style: TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               TabBar(
                 controller: _tabController,
                 tabs: const [
