@@ -1,10 +1,10 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../main.dart' show currentEmployee;
 import '../models/press_manual_entry.dart';
+import '../models/press_manual_pdf_source.dart';
 import '../models/press_manuals_access_settings.dart';
 import '../services/press_manuals_access_service.dart';
 import '../services/secure_screen_service.dart';
@@ -12,15 +12,16 @@ import '../theme/app_theme.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/ctp_app_bar.dart';
 
-/// In-app OEM PDF viewer — private file only, FLAG_SECURE, no share/export.
+/// In-app OEM PDF viewer — private file/bytes only, FLAG_SECURE on Android,
+/// no share/export/external browser open.
 class PressManualPdfViewerScreen extends StatefulWidget {
   final PressManualEntry entry;
-  final File file;
+  final PressManualPdfSource source;
 
   const PressManualPdfViewerScreen({
     super.key,
     required this.entry,
-    required this.file,
+    required this.source,
   });
 
   @override
@@ -105,6 +106,41 @@ class _PressManualPdfViewerScreenState
       q.trim(),
       caseInsensitive: true,
       searchImmediately: true,
+    );
+  }
+
+  Widget _buildPdfViewer(ColorScheme scheme, PdfTextSearcher? searcher) {
+    final params = PdfViewerParams(
+      backgroundColor: scheme.surface,
+      pagePaintCallbacks: [
+        if (searcher != null) searcher.pageTextMatchPaintCallback,
+      ],
+      linkHandlerParams: PdfLinkHandlerParams(
+        onLinkTap: (_) {},
+      ),
+    );
+
+    final src = widget.source;
+    if (src.hasBytes) {
+      return PdfViewer.data(
+        src.bytes as Uint8List,
+        sourceName: src.sourceName,
+        controller: _controller,
+        params: params,
+      );
+    }
+    if (src.hasFile) {
+      return PdfViewer.file(
+        src.filePath!,
+        controller: _controller,
+        params: params,
+      );
+    }
+    return Center(
+      child: Text(
+        'No PDF data.',
+        style: TextStyle(color: scheme.onSurface),
+      ),
     );
   }
 
@@ -222,21 +258,7 @@ class _PressManualPdfViewerScreenState
                 ),
               ),
             ),
-          Expanded(
-            child: PdfViewer.file(
-              widget.file.path,
-              controller: _controller,
-              params: PdfViewerParams(
-                backgroundColor: scheme.surface,
-                pagePaintCallbacks: [
-                  if (searcher != null) searcher.pageTextMatchPaintCallback,
-                ],
-                linkHandlerParams: PdfLinkHandlerParams(
-                  onLinkTap: (_) {},
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: _buildPdfViewer(scheme, searcher)),
         ],
       ),
     );

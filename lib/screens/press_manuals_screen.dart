@@ -151,7 +151,7 @@ class _PressManualsScreenState extends State<PressManualsScreen>
     });
 
     try {
-      final file = await _cache.ensureLocal(
+      final source = await _cache.ensureLocal(
         entry,
         onProgress: (p) {
           if (mounted) setState(() => _downloadProgress = p);
@@ -165,8 +165,10 @@ class _PressManualsScreenState extends State<PressManualsScreen>
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              PressManualPdfViewerScreen(entry: entry, file: file),
+          builder: (_) => PressManualPdfViewerScreen(
+            entry: entry,
+            source: source,
+          ),
         ),
       );
     } on FirebaseException catch (e) {
@@ -223,9 +225,9 @@ class _PressManualsScreenState extends State<PressManualsScreen>
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Press manuals are only available to isAdmin users, or to '
-              'Pressroom / technicians when an admin enables those switches '
-              'under Factory Admin → Modules.',
+              'Press manuals are only available to isAdmin users, people on '
+              'the individual allowlist, or Pressroom / technicians when an '
+              'admin enables those switches under Factory Admin → Modules.',
               textAlign: TextAlign.center,
               style: TextStyle(color: scheme.onSurface),
             ),
@@ -361,7 +363,8 @@ class _HintCard extends StatelessWidget {
             Expanded(
               child: Text(
                 'Pick a press tab for its packs and handbooks. Short packs open '
-                'straight away; larger OEM files download when you open them. '
+                'straight away; larger OEM files download into private app '
+                'storage (or this browser session on web) when you open them. '
                 'Use search to filter the current tab.',
                 style: TextStyle(
                   fontSize: 13,

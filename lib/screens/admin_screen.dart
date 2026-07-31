@@ -18,6 +18,7 @@ import '../models/employee.dart';
 import 'admin_modules_screen.dart';
 import 'admin_tools_screen.dart';
 import 'press_live_access_admin_screen.dart';
+import 'press_manuals_allowlist_admin_screen.dart';
 import 'geofence_editor_screen.dart';
 import '../services/device_health_service.dart';
 import '../services/location_service.dart';
@@ -2692,6 +2693,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const PressLiveAccessAdminScreen()),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _hubTile(
+          icon: Icons.menu_book_outlined,
+          title: 'Press Manuals allowlist',
+          subtitle: 'Named managers / staff + group toggles under Modules',
+          iconColor: const Color(0xFF0F766E),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const PressManualsAllowlistAdminScreen(),
+            ),
           ),
         ),
         const SizedBox(height: 8),

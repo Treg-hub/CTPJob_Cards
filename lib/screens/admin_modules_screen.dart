@@ -11,6 +11,7 @@ import '../utils/persona_audit.dart';
 import '../utils/role.dart' as role_utils;
 import '../utils/screen_insets.dart';
 import 'copper_dashboard_screen.dart';
+import 'press_manuals_allowlist_admin_screen.dart';
 
 /// Factory-wide module on/off gates + Copper dashboard shortcut.
 class AdminModulesScreen extends StatefulWidget {
@@ -106,7 +107,11 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
       _moduleSaving = true;
     });
     try {
-      await _pressManualsAccess.saveSettings(updated);
+      // Flags only — do not rewrite allowed_clock_nos from possibly stale UI state.
+      await _pressManualsAccess.saveGroupFlags(
+        allowPressroom: updated.allowPressroom,
+        allowTechnicians: updated.allowTechnicians,
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _pressManualsAccessSettings = current);
@@ -214,9 +219,10 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'isAdmin always has access. Use these switches to open the Home '
-            '“Press Manuals” library to more people. OEM PDFs still download '
-            'only in-app when allowed by Storage rules.',
+            'isAdmin always has access. Use these switches for whole groups, '
+            'or the allowlist for named managers/employees (any department). '
+            'OEM PDFs download only in-app (mobile private cache or web '
+            'session) when Storage rules allow the signed-in user.',
             style: TextStyle(fontSize: 12, color: muted, height: 1.35),
           ),
           const SizedBox(height: 8),
@@ -242,7 +248,7 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
                         ? 'Loading…'
                         : _pressManualsAccessSettings!.allowPressroom
                             ? 'On — Pressroom department can open Press Manuals'
-                            : 'Off — Pressroom only if they are isAdmin',
+                            : 'Off — Pressroom only if they are isAdmin or allowlisted',
                     style: TextStyle(
                       color: Theme.of(context).appColors.textMuted,
                     ),
@@ -270,7 +276,7 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
                         ? 'Loading…'
                         : _pressManualsAccessSettings!.allowTechnicians
                             ? 'On — mechanics / electrical / technicians can open'
-                            : 'Off — technicians only if they are isAdmin',
+                            : 'Off — technicians only if they are isAdmin or allowlisted',
                     style: TextStyle(
                       color: Theme.of(context).appColors.textMuted,
                     ),
@@ -280,6 +286,43 @@ class _AdminModulesScreenState extends State<AdminModulesScreen> {
                   onChanged: _moduleSaving || _pressManualsAccessSettings == null
                       ? null
                       : (v) => _setPressManualsFlag(allowTechnicians: v),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: Icon(
+                    Icons.playlist_add_check,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(
+                    'Individual allowlist',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _pressManualsAccessSettings == null
+                        ? 'Loading…'
+                        : _pressManualsAccessSettings!
+                                .allowedClockNos.isEmpty
+                            ? 'No named people yet — add managers or others'
+                            : '${_pressManualsAccessSettings!.allowedClockNos.length} '
+                                'clock number(s) granted access',
+                    style: TextStyle(
+                      color: Theme.of(context).appColors.textMuted,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    await Navigator.push<void>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const PressManualsAllowlistAdminScreen(),
+                      ),
+                    );
+                    if (!mounted) return;
+                    await _loadModuleStates();
+                  },
                 ),
               ],
             ),

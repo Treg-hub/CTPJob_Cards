@@ -430,11 +430,13 @@ const String pressroomDepartment = 'Pressroom';
 /// Home tile + in-app press manuals library.
 ///
 /// Always: dual claim/registry [isAdmin].
-/// Optionally (admin toggles on `settings/press_manuals_access`):
+/// Optionally (admin config on `settings/press_manuals_access`):
 /// - [allowPressroom] — department Pressroom
 /// - [allowTechnicians] — [UserRole.technician] (any department)
+/// - [allowedClockNos] — individual clock allowlist (any dept/role)
 ///
 /// Pass [access] from that settings doc; when null, only isAdmin (safe default).
+/// Storage rules mirror these gates for OEM PDF downloads.
 bool canAccessPressManuals(
   Employee? employee, [
   PressManualsAccessSettings? access,
@@ -442,6 +444,7 @@ bool canAccessPressManuals(
   if (employee == null) return false;
   if (isAdmin(employee)) return true;
   final flags = access ?? PressManualsAccessSettings.defaults;
+  if (flags.isClockAllowed(employee.clockNo)) return true;
   if (flags.allowPressroom &&
       employee.department.trim().toLowerCase() ==
           pressroomDepartment.toLowerCase()) {

@@ -121,8 +121,8 @@ class _PressManualViewerScreenState extends State<PressManualViewerScreen> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Access denied. isAdmin, or Pressroom / technicians when enabled '
-              'by an admin.',
+              'Access denied. isAdmin, allowlisted clocks, or Pressroom / '
+              'technicians when enabled by an admin.',
               textAlign: TextAlign.center,
               style: TextStyle(color: scheme.onSurface),
             ),
