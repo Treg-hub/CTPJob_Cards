@@ -1,5 +1,6 @@
 import '../models/employee.dart';
 import '../models/fleet_settings.dart';
+import '../models/impression_settings.dart';
 import '../models/job_card.dart';
 import '../models/press_manuals_access_settings.dart';
 import '../models/security_settings.dart';
@@ -419,6 +420,92 @@ bool isInkManager(Employee? employee) {
   if (isAdmin(employee)) return true;
   return isInkUser(employee) &&
       employee.position.toLowerCase().contains('manager');
+}
+
+// =============================================================================
+// IMPRESSION ROLLERS
+// =============================================================================
+// Pressroom: dept Pressroom + pos No1 / No2 / Foreman (or manager).
+// Mechanical: Workshop + Mechanic or Mechanical Manager.
+// Electrical: Workshop + Electrician or Electrical Manager.
+// Managers can do everything their department can. isAdmin = full.
+// Optional settings clock lists = extras only.
+
+const String workshopDepartment = 'Workshop';
+// pressroomDepartment declared with Press Manuals section below (same value).
+
+bool _clockInList(String? clockNo, List<String> list) {
+  if (clockNo == null || clockNo.isEmpty) return false;
+  final n = ImpressionSettings.normalizeClockNo(clockNo);
+  return list.map(ImpressionSettings.normalizeClockNo).contains(n);
+}
+
+bool isImpressionMechanical(Employee? employee, [ImpressionSettings? settings]) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  if (_clockInList(employee.clockNo, settings?.mechanicalClockNos ?? const [])) {
+    return true;
+  }
+  final dept = employee.department.trim().toLowerCase();
+  final pos = employee.position.trim().toLowerCase();
+  if (dept != workshopDepartment.toLowerCase()) return false;
+  if (pos == 'mechanic') return true;
+  if (pos.contains('manager') &&
+      (pos.contains('mechanic') || pos.contains('mechanical'))) {
+    return true;
+  }
+  return false;
+}
+
+bool isImpressionElectrical(Employee? employee, [ImpressionSettings? settings]) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  if (_clockInList(employee.clockNo, settings?.electricalClockNos ?? const [])) {
+    return true;
+  }
+  final dept = employee.department.trim().toLowerCase();
+  final pos = employee.position.trim().toLowerCase();
+  if (dept != workshopDepartment.toLowerCase()) return false;
+  if (pos == 'electrician' || pos.contains('electrician')) return true;
+  if (pos.contains('manager') && pos.contains('electric')) return true;
+  return false;
+}
+
+bool isImpressionPressroom(Employee? employee, [ImpressionSettings? settings]) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  if (_clockInList(
+      employee.clockNo, settings?.pressroomExtraClockNos ?? const [])) {
+    return true;
+  }
+  final dept = employee.department.trim().toLowerCase();
+  final pos = employee.position.trim().toLowerCase();
+  if (dept != 'pressroom') return false;
+  if (pos == 'no1' || pos == 'no2' || pos == 'foreman') return true;
+  if (pos.contains('manager')) return true;
+  return false;
+}
+
+bool canAccessImpressionRollers(
+  Employee? employee, [
+  ImpressionSettings? settings,
+]) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  final s = settings ?? ImpressionSettings.defaults;
+  if (!s.moduleEnabled) return false;
+  return isImpressionMechanical(employee, s) ||
+      isImpressionElectrical(employee, s) ||
+      isImpressionPressroom(employee, s);
+}
+
+/// Role gate only — combine with [PresenceGating.canAccessImpressionRollersPresence]
+/// for on-site rules (managers/admin off-site OK; others must be on-site).
+bool isImpressionManagerOffSiteAllowed(Employee? employee) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  if (roleFromEmployee(employee) == UserRole.manager) return true;
+  return employee.position.toLowerCase().contains('manager');
 }
 
 // =============================================================================

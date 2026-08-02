@@ -69,9 +69,12 @@ import 'lurgi_home_screen.dart';
 import 'security_home_screen.dart';
 import 'press_live_screen.dart';
 import 'press_manuals_screen.dart';
+import 'impression_hub_screen.dart';
 import '../models/press_manuals_access_settings.dart';
+import '../models/impression_settings.dart';
 import '../services/press_live_service.dart';
 import '../services/press_manuals_access_service.dart';
+import '../services/impression_service.dart';
 
 import '../models/fleet_settings.dart';
 import '../models/security_settings.dart';
@@ -161,6 +164,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   /// Press Manuals — isAdmin + optional flags from settings/press_manuals_access.
   PressManualsAccessSettings _pressManualsAccess =
       PressManualsAccessSettings.defaults;
+
+  ImpressionSettings _impressionSettings = ImpressionSettings.defaults;
 
   /// When true, first-frame update check ran without employee clock/dept —
   /// re-run channel match once the profile loads (targeted force/soft).
@@ -752,6 +757,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
       });
     }
+    // Impression rollers — role gate + presence: managers/admin off-site OK; others on-site.
+    if (role_utils.canAccessImpressionRollers(
+            currentEmployee, _impressionSettings) &&
+        PresenceGating.canAccessImpressionRollersPresence(
+          emp: currentEmployee,
+          isOnSite: isOnSite,
+        )) {
+      inkPlant.add({
+        'title': 'Imp Rollers',
+        'icon': Icons.rotate_right,
+        // Plant / press tool — brand terracotta (matches factory map), not Lurgi indigo.
+        'color': kBrandOrange,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ImpressionHubScreen()),
+            ),
+      });
+    }
     // Ink (and non-Lurgi meter users): standalone Daily Readings on Home.
     // Lurgi dept opens the same screen from the Lurgi hub.
     if (_canUseOnSiteModules &&
@@ -893,6 +916,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       }
     } catch (e) {
       debugPrint('Fleet settings load error: $e');
+    }
+  }
+
+  Future<void> _loadImpressionSettings() async {
+    try {
+      final settings = await ImpressionService.instance.getSettings();
+      if (mounted) {
+        setState(() => _impressionSettings = settings);
+      }
+    } catch (e) {
+      debugPrint('Impression settings load error: $e');
     }
   }
 
@@ -1198,6 +1232,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _loadFleetSettings();
     _loadWasteSettings();
     _loadSecuritySettings();
+    unawaited(_loadImpressionSettings());
     unawaited(_loadPressLiveAccess());
           unawaited(_loadPressManualsAccess());
     // Offline cold start: re-attempt any module-settings load that failed

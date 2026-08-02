@@ -92,6 +92,25 @@ class PresenceGating {
       ),
     );
   }
+
+  /// Impression Rollers: **managers + admin** may open off-site; minders/techs on-site only.
+  ///
+  /// Manager = [roleFromEmployee] manager (position contains "manager") or [isAdmin].
+  /// Foreman / No1 / No2 / Mechanic / Electrician without "manager" in title → on-site only.
+  static bool canAccessImpressionRollersPresence({
+    required Employee? emp,
+    required bool isOnSite,
+  }) {
+    if (emp == null) return false;
+    if (bypassesOffSiteRestrictions(emp)) return true;
+    if (roleFromEmployee(emp) == UserRole.manager) return true;
+    if (emp.position.toLowerCase().contains('manager')) return true;
+    return isOnSite;
+  }
+
+  static const String offSiteImpressionMessage =
+      'Impression Rollers is on-site only for floor roles. '
+      'Managers may open it off-site. Return to the factory or wait for location to update.';
 }
 
 /// Full-screen guard when a module route is opened while off-site.

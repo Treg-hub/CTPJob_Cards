@@ -58,6 +58,17 @@ class Collections {
   static const String fleetAudit = 'fleet_audit';
   static const String fleetDailyChecks = 'fleet_daily_checks';
 
+  // ----- Impression Rollers (impression_ prefix) -----
+  static const String impressionSettings = 'impression_settings';
+  static const String impressionUnitSlots = 'impression_unit_slots';
+  static const String impressionShafts = 'impression_shafts';
+  static const String impressionSleeves = 'impression_sleeves';
+  static const String impressionCycles = 'impression_cycles';
+  static const String impressionDailyIr = 'impression_daily_ir';
+  static const String impressionDailyEsa = 'impression_daily_esa';
+  static const String impressionPressureFlags = 'impression_pressure_flags';
+  static const String impressionAudit = 'impression_audit';
+
   // ----- Waste Management / WasteTrack (waste_ prefix) -----
   // Integrated inside this app. See docs/COLLECTIONS.md for full rationale.
   static const String wasteLoads = 'waste_loads';
