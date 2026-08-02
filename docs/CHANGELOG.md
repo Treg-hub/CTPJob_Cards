@@ -1,4 +1,4 @@
-# CTP Job Cards — Documentation Changelog
+# CTP Job Cards - Documentation Changelog
 
 Append-only log of user-visible changes. Add a new entry at the top each release; do not edit historical entries except to fix factual errors.
 
@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-02 - 2.3.0+196 - Imp Rollers on Home
+
+### What you will notice
+
+- **Home → Imp Rollers** (when your role allows it): track impression rollers on Badenia, Aurora, and Wifag — what is in each unit, spares, and hand-offs between Mechanical, Electrical, and Pressroom.
+- Pressroom can remove and install rollers, and complete **daily IR** and **daily ESA** checks.
+- Mechanical can start a build (shaft + sleeve), strip, and send sleeves out; Electrical can run conductivity tests.
+- **Managers** can open Imp Rollers off site; floor roles use it **on site** only.
+- Open a unit or cycle for history when you need to review a roller life.
+
+---
 ## 2026-07-30 — 2.3.0+195 — Job History + copper ready for collection
 
 ### What you will notice
@@ -1351,3 +1362,4 @@ A full waste management module is now integrated into the app for Security depar
 ---
 
 <!-- Add new entries above this line. Keep entries scoped to a single release. -->
+
