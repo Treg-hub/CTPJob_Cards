@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-03 — 2.3.0+197 — Ink delivery note number
+
+### What you will notice
+
+- After you photograph a transporter **delivery note** (Ink receive), the app tries to **read the number** from the top of the form (for example WL817898).
+- Check it matches the paper, tick **confirm**, then save. You can still type or correct the number if the photo is hard to read.
+- That number is stored with the load so stores can match the physical note to the receipt summary.
+
+---
+
 ## 2026-08-02 - 2.3.0+196 - Imp Rollers on Home
 
 ### What you will notice
