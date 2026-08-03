@@ -1175,6 +1175,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     unawaited(_refreshEmployeeOnResume());
 
     // Presence correction runs alongside hydrate — never blocks it.
+    // checkCurrentLocation also re-registers the fence, flushes no-signal
+    // queued presence, and keeps sticky on-site when GPS fails (dead zones).
     final Future<bool?>? gpsFuture =
         _testMode ? null : _locationService.checkCurrentLocation();
 

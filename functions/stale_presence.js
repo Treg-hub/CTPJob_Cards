@@ -10,7 +10,9 @@
  * app_geofence and force-clears them (Admin SDK). Schedule: every 2 hours.
  *
  * Proof window: 2 hours (aligned with the schedule). A healthy phone should
- * have ~4 WorkManager checks in that window.
+ * have several WorkManager checks in that window (boost + ~20 min periodic).
+ * Factory no-signal pockets (~30 min) are OK: client is sticky on-site without
+ * GPS and queues breadcrumbs until signal returns (sources *_flush).
  *
  * Exemption — iPhone/iPad Safari web: no geofence, deliberately left isOnSite
  * true so they stay in onsite escalation recipient queries; notifications are
@@ -26,7 +28,14 @@ const PROOF_EVENT_TYPES = new Set(["check", "enter"]);
 /** Sources that prove the device (or an admin) still affirms presence. */
 const PROOF_SOURCES = new Set([
   "workmanager_30min",
+  "workmanager_boost",
+  "offsite_reconcile",
   "app_open_check",
+  // Flush after a factory no-signal pocket (queued client write).
+  "workmanager_30min_flush",
+  "workmanager_boost_flush",
+  "offsite_reconcile_flush",
+  "app_open_check_flush",
   "native_geofence",
   "native_geofence_fg",
   "admin_manual",

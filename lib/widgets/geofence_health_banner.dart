@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/device_health_service.dart';
+import '../services/location_service.dart';
 import '../theme/app_theme.dart';
 
 /// Home banner when any critical device permission is missing — geofence,
@@ -58,6 +61,16 @@ class _GeofenceHealthBannerState extends State<GeofenceHealthBanner>
     try {
       await DeviceHealthService().fixMissing();
       await DeviceHealthService().syncPermissionsToFirestore();
+      // Re-register native fence + background checks after permission grants
+      // (startNativeMonitoring used to only run at cold login).
+      if (!kIsWeb && await Permission.locationAlways.isGranted) {
+        final prefs = await SharedPreferences.getInstance();
+        final clockNo = prefs.getString('loggedInClockNo');
+        if (clockNo != null && clockNo.isNotEmpty) {
+          await LocationService().startNativeMonitoring(clockNo, force: true);
+          await LocationService().checkCurrentLocation();
+        }
+      }
     } finally {
       await _refresh();
       if (mounted) setState(() => _busy = false);

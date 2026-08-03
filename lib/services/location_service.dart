@@ -1,17 +1,32 @@
+// location_service.dart
+// Native geofence + WorkManager presence. Quiet at home (strict enter);
+// sticky on-site in factory dead zones (no GPS/signal ≠ left site).
+
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
+
+import '../constants/collections.dart';
 import 'firestore_service.dart';
 import 'notification_service.dart';
-import '../constants/collections.dart';
 
-const String locationTaskName = "ctp_location_check_task";
+/// On-site heartbeat (while marked on-site).
+const String locationTaskName = 'ctp_location_check_task';
+
+/// Off-site reconcile — GPS promote only with a clear in-radius fix.
+const String offsiteReconcileTaskName = 'ctp_offsite_reconcile_task';
+
+/// Early post-enter one-shot heartbeats (unique name prefix).
+const String onsiteBoostTaskPrefix = 'ctp_onsite_boost_';
+
 const MethodChannel _channel = MethodChannel('ctp/geofence');
 
 /// Central geofence barrier (lat/lng/radius). Single source of truth: the
@@ -31,12 +46,55 @@ const GeofenceConfig kDefaultGeofence =
 
 /// Hysteresis margin (metres) for the off-site decision. Presence is sticky:
 /// you become on-site within [GeofenceConfig.radius], but only flip back to
-/// off-site once you are clearly beyond `radius + this margin`. The dead-band
-/// between the two stops GPS jitter at the boundary from oscillating isOnSite
-/// (the bug that spammed the on/off-site notice). Errs toward on-site, since a
-/// false off-site is the harmful case — it parks notifications to the inbox and
-/// blocks on-site-only job creation.
+/// off-site once you are clearly beyond `radius + this margin`.
 const double kGeofenceHysteresisMargin = 150.0;
+
+/// Reject GPS for any status decision above this (factory dead zones / indoor
+/// multipath). Prefer "no change" over a wrong flip.
+const double kMaxUsableAccuracyM = 400.0;
+
+/// Promote off→on only with a tighter accuracy (home-quiet guarantee).
+const double kMaxAccuracyForEnterM = 150.0;
+
+/// Demote on→off only when accuracy is good enough to trust "outside".
+const double kMaxAccuracyForExitM = 250.0;
+
+/// Still log a heartbeat breadcrumb up to this accuracy while on-site.
+const double kMaxAccuracyForCheckProofM = 350.0;
+
+const String _prefsLastKnownOnSite = 'presence_lastKnownIsOnSite';
+const String _prefsPending = 'presence_pending_v1';
+
+/// Pure decision helper — unit-testable.
+///
+/// Returns:
+/// - `true` / `false` when GPS is good enough to decide
+/// - `null` when the fix is unusable (dead zone / timeout path should pass null)
+///   so the caller **must not** change isOnSite (sticky).
+bool? resolveOnSiteFromFix({
+  required bool currentlyOnSite,
+  required double distM,
+  required double radiusM,
+  required double accuracyM,
+  double hysteresisM = kGeofenceHysteresisMargin,
+  double maxUsableAccuracyM = kMaxUsableAccuracyM,
+  double maxEnterAccuracyM = kMaxAccuracyForEnterM,
+  double maxExitAccuracyM = kMaxAccuracyForExitM,
+}) {
+  if (accuracyM <= 0 || accuracyM > maxUsableAccuracyM) return null;
+
+  if (currentlyOnSite) {
+    // Sticky on-site: only leave with a clear outside fix.
+    if (accuracyM > maxExitAccuracyM) return null;
+    if (distM > radiusM + hysteresisM) return false;
+    return true;
+  }
+
+  // Off-site → on-site only inside the real radius with good accuracy.
+  if (accuracyM > maxEnterAccuracyM) return null;
+  if (distM <= radiusM) return true;
+  return false;
+}
 
 /// Reads the central geofence barrier from `settings/geofence`, falling back to
 /// [kDefaultGeofence]. Top-level so the WorkManager isolate can call it too.
@@ -61,9 +119,12 @@ Future<GeofenceConfig> loadGeofenceConfig() async {
 }
 
 // ---------------------------------------------------------------------------
-// WorkManager callback — runs in a separate isolate, no access to LocationService
-// state. Only scheduled when employee is on-site. Self-cancels when off-site
-// is detected so it stops running once the employee has left.
+// WorkManager callback — separate isolate. Handles:
+//   • on-site periodic heartbeat
+//   • post-enter boost one-shots
+//   • off-site reconcile (strict enter only)
+// Dead zone: GPS failure / bad accuracy → no presence flip; retry later.
+// No-signal: queue writes; do not require network to *run* the task.
 // ---------------------------------------------------------------------------
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -75,49 +136,90 @@ void callbackDispatcher() {
 
       final prefs = await SharedPreferences.getInstance();
       final clockNo = prefs.getString('loggedInClockNo');
-
-      // No logged-in user — cancel self, nothing to check.
       if (clockNo == null) {
         await Workmanager().cancelByUniqueName(locationTaskName);
-        return Future.value(true);
+        await Workmanager().cancelByUniqueName(offsiteReconcileTaskName);
+        return true;
       }
+
+      // Flush anything queued while in a no-signal pocket of the plant.
+      await _flushPendingPresence(prefs);
+
+      final isBoost = task.startsWith(onsiteBoostTaskPrefix);
+      final isReconcile = task == offsiteReconcileTaskName;
+
+      final source = isReconcile
+          ? 'offsite_reconcile'
+          : (isBoost ? 'workmanager_boost' : 'workmanager_30min');
 
       final cfg = await loadGeofenceConfig();
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
+      Position pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 20),
+          ),
+        );
+      } catch (e) {
+        // Dead zone / no GPS: leave presence unchanged (sticky).
+        debugPrint('WorkManager GPS failed (no flip): $e');
+        return true;
+      }
 
       final dist = Geolocator.distanceBetween(
-          cfg.latitude, cfg.longitude, pos.latitude, pos.longitude);
+        cfg.latitude,
+        cfg.longitude,
+        pos.latitude,
+        pos.longitude,
+      );
 
       final firestore = FirestoreService();
       final emp = await firestore.getEmployee(clockNo);
+      final currentlyOnSite = emp?.isOnSite ??
+          prefs.getBool(_prefsLastKnownOnSite) ??
+          false;
 
-      if (emp == null) return Future.value(true);
+      final decided = resolveOnSiteFromFix(
+        currentlyOnSite: currentlyOnSite,
+        distM: dist,
+        radiusM: cfg.radius,
+        accuracyM: pos.accuracy,
+      );
 
-      // Hysteresis dead-band: once on-site, only flip off-site beyond
-      // radius+margin; once off-site, only flip on-site within radius. Stops
-      // boundary jitter from oscillating isOnSite.
-      final onSite = emp.isOnSite
-          ? dist <= cfg.radius + kGeofenceHysteresisMargin
-          : dist <= cfg.radius;
+      if (decided == null) {
+        // Unusable fix — factory indoor / multipath. Do not demote or promote.
+        debugPrint(
+          'WorkManager: unusable fix acc=${pos.accuracy.toStringAsFixed(0)}m '
+          'dist=${dist.toStringAsFixed(0)}m — sticky (no flip)',
+        );
+        return true;
+      }
 
-      if (emp.isOnSite != onSite) {
-        // Transition — the CF stamps the timestamps and logs the enter/exit to
-        // app_geofence (source carries through).
-        await firestore.updateMyPresence(isOnSite: onSite, source: 'workmanager_30min');
-        debugPrint('📍 WorkManager: isOnSite changed to $onSite');
-      } else if (onSite) {
-        // No change but still on-site — heartbeat breadcrumb so the admin 14h
-        // stuck-investigation has a trail ("log all adjustments incl. workmanager").
-        await firestore.logGeoFenceEvent(
+      if (currentlyOnSite != decided) {
+        final ok = await _writePresenceOrQueue(
+          prefs: prefs,
+          firestore: firestore,
+          isOnSite: decided,
+          source: source,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+          radiusUsed: cfg.radius,
+          eventType: decided ? 'enter' : 'exit',
+        );
+        debugPrint(
+          '📍 WorkManager ($source): isOnSite $currentlyOnSite → $decided '
+          '(queued=${!ok})',
+        );
+      } else if (decided && pos.accuracy <= kMaxAccuracyForCheckProofM) {
+        // Heartbeat proof for stale-presence CF (only while on-site).
+        await _writeCheckOrQueue(
+          prefs: prefs,
+          firestore: firestore,
           clockNo: clockNo,
-          eventType: 'check',
-          source: 'workmanager_30min',
+          source: source,
           latitude: pos.latitude,
           longitude: pos.longitude,
           accuracy: pos.accuracy,
@@ -125,17 +227,207 @@ void callbackDispatcher() {
         );
       }
 
-      // Off-site (just changed or already) — cancel WorkManager. It must not
-      // keep running once off-site; an ENTER restarts it.
-      if (!onSite) {
+      await prefs.setBool(_prefsLastKnownOnSite, decided);
+
+      // Keep schedules aligned with resolved state.
+      if (decided) {
+        await _wmStartOnsiteHeartbeat(rescheduleBoost: false);
+        await Workmanager().cancelByUniqueName(offsiteReconcileTaskName);
+      } else {
         await Workmanager().cancelByUniqueName(locationTaskName);
-        debugPrint('🛑 WorkManager self-cancelled — employee is off-site');
+        await _wmCancelBoosts();
+        await _wmStartOffsiteReconcile();
       }
     } catch (e) {
       debugPrint('WorkManager error: $e');
     }
-    return Future.value(true);
+    return true;
   });
+}
+
+// ---- isolate helpers (top-level; no LocationService instance) --------------
+
+Future<bool> _writePresenceOrQueue({
+  required SharedPreferences prefs,
+  required FirestoreService firestore,
+  required bool isOnSite,
+  required String source,
+  double? latitude,
+  double? longitude,
+  double? accuracy,
+  double? radiusUsed,
+  required String eventType,
+}) async {
+  final ok =
+      await firestore.updateMyPresence(isOnSite: isOnSite, source: source);
+  if (ok) {
+    await prefs.setBool(_prefsLastKnownOnSite, isOnSite);
+    await prefs.remove(_prefsPending);
+    return true;
+  }
+  debugPrint('Presence write failed — queueing for signal return');
+  await prefs.setString(
+    _prefsPending,
+    jsonEncode({
+      'kind': 'presence',
+      'isOnSite': isOnSite,
+      'source': source,
+      'eventType': eventType,
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy': accuracy,
+      'radiusUsed': radiusUsed,
+      'queuedAtMs': DateTime.now().millisecondsSinceEpoch,
+    }),
+  );
+  // Local sticky so resume UI / next reconcile know intent while offline.
+  await prefs.setBool(_prefsLastKnownOnSite, isOnSite);
+  return false;
+}
+
+Future<void> _writeCheckOrQueue({
+  required SharedPreferences prefs,
+  required FirestoreService firestore,
+  required String clockNo,
+  required String source,
+  required double latitude,
+  required double longitude,
+  required double accuracy,
+  required double radiusUsed,
+}) async {
+  final ok = await firestore.logGeoFenceEvent(
+    clockNo: clockNo,
+    eventType: 'check',
+    source: source,
+    latitude: latitude,
+    longitude: longitude,
+    accuracy: accuracy,
+    radiusUsed: radiusUsed,
+  );
+  if (ok) return;
+
+  debugPrint('Check log failed — queueing for signal return');
+  final existing = prefs.getString(_prefsPending);
+  // Do not overwrite a pending enter/exit with a check.
+  if (existing != null) {
+    try {
+      final m = jsonDecode(existing) as Map<String, dynamic>;
+      if (m['kind'] == 'presence') return;
+    } catch (_) {}
+  }
+  await prefs.setString(
+    _prefsPending,
+    jsonEncode({
+      'kind': 'check',
+      'clockNo': clockNo,
+      'source': source,
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy': accuracy,
+      'radiusUsed': radiusUsed,
+      'queuedAtMs': DateTime.now().millisecondsSinceEpoch,
+    }),
+  );
+}
+
+Future<void> _flushPendingPresence(SharedPreferences prefs) async {
+  final raw = prefs.getString(_prefsPending);
+  if (raw == null) return;
+  try {
+    final m = jsonDecode(raw) as Map<String, dynamic>;
+    final firestore = FirestoreService();
+    final kind = m['kind'] as String? ?? 'presence';
+    if (kind == 'presence') {
+      final isOnSite = m['isOnSite'] as bool? ?? false;
+      final source = '${m['source'] ?? 'queued'}_flush';
+      await firestore.updateMyPresence(isOnSite: isOnSite, source: source);
+      await prefs.setBool(_prefsLastKnownOnSite, isOnSite);
+    } else if (kind == 'check') {
+      final clockNo = m['clockNo'] as String? ?? prefs.getString('loggedInClockNo');
+      if (clockNo != null) {
+        await firestore.logGeoFenceEvent(
+          clockNo: clockNo,
+          eventType: 'check',
+          source: '${m['source'] ?? 'queued'}_flush',
+          latitude: (m['latitude'] as num?)?.toDouble(),
+          longitude: (m['longitude'] as num?)?.toDouble(),
+          accuracy: (m['accuracy'] as num?)?.toDouble(),
+          radiusUsed: (m['radiusUsed'] as num?)?.toDouble(),
+          notes: 'Flushed after no-signal pocket',
+        );
+      }
+    }
+    await prefs.remove(_prefsPending);
+    debugPrint('📍 Flushed pending presence/check');
+  } catch (e) {
+    debugPrint('Flush pending presence failed (will retry): $e');
+  }
+}
+
+Future<void> _wmStartOnsiteHeartbeat({required bool rescheduleBoost}) async {
+  await Workmanager().initialize(callbackDispatcher);
+  await Workmanager().registerPeriodicTask(
+    locationTaskName,
+    locationTaskName,
+    frequency: const Duration(minutes: 20),
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    // Run even without data (factory dead zones) — writes queue if offline.
+    constraints: Constraints(
+      networkType: NetworkType.notRequired,
+      requiresBatteryNotLow: false,
+    ),
+  );
+  if (rescheduleBoost) {
+    await _wmScheduleBoosts();
+  }
+}
+
+Future<void> _wmScheduleBoosts() async {
+  // Early checks after enter so the 2h stale CF does not win before the first
+  // periodic tick (OEM often delays the first 20–30 min job).
+  const delays = [10, 25, 45];
+  for (final minutes in delays) {
+    final name = '$onsiteBoostTaskPrefix$minutes';
+    try {
+      await Workmanager().registerOneOffTask(
+        name,
+        name,
+        initialDelay: Duration(minutes: minutes),
+        existingWorkPolicy: ExistingWorkPolicy.replace,
+        constraints: Constraints(
+          networkType: NetworkType.notRequired,
+          requiresBatteryNotLow: false,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Boost schedule $minutes failed: $e');
+    }
+  }
+}
+
+Future<void> _wmCancelBoosts() async {
+  for (final minutes in [10, 25, 45]) {
+    try {
+      await Workmanager().cancelByUniqueName('$onsiteBoostTaskPrefix$minutes');
+    } catch (_) {}
+  }
+}
+
+Future<void> _wmStartOffsiteReconcile() async {
+  await Workmanager().initialize(callbackDispatcher);
+  await Workmanager().registerPeriodicTask(
+    offsiteReconcileTaskName,
+    offsiteReconcileTaskName,
+    // ~hourly is enough for continental recovery without heavy battery use.
+    // Android may batch; still far better than "only on app open".
+    frequency: const Duration(minutes: 60),
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    constraints: Constraints(
+      networkType: NetworkType.notRequired,
+      requiresBatteryNotLow: false,
+    ),
+  );
+  debugPrint('📍 Off-site reconcile scheduled');
 }
 
 // ---------------------------------------------------------------------------
@@ -152,47 +444,47 @@ class LocationService {
 
   bool _isInitialized = false;
 
-  // ---------------------------------------------------------------------------
-  // Startup — called once after login. Registers the native geofence and sets
-  // up the MethodChannel handler. WorkManager is NOT started here; it is
-  // started by checkCurrentLocation() if the employee is already on-site, or
-  // by _handleNativeGeofenceEvent() when an ENTER event fires.
-  // ---------------------------------------------------------------------------
-  Future<void> startNativeMonitoring(String clockNo) async {
+  /// Registers native geofence + WorkManager. Safe to call again after
+  /// permission fix / resume ([force] re-registers the fence).
+  Future<void> startNativeMonitoring(
+    String clockNo, {
+    bool force = false,
+  }) async {
     if (kIsWeb) return;
-    if (_isInitialized) return;
 
     _clockNo = clockNo;
     await _requestPermissions();
     await _notificationService.initialize();
 
     try {
-      final cfg = await loadGeofenceConfig();
-
-      await _channel.invokeMethod('registerGeofence', {
-        'clockNo': clockNo,
-        'lat': cfg.latitude,
-        'lng': cfg.longitude,
-        // Register at the outer (exit) band so the native EXIT only fires once
-        // clearly off-site — hysteresis against boundary jitter while the app is
-        // backgrounded/killed. The precise on-site radius is enforced by the
-        // polling checks (app-open + 30-min WorkManager).
-        'radius': cfg.radius + kGeofenceHysteresisMargin,
-      });
-
-      debugPrint('✅ Native geofence registered');
-
-      // Handle ENTER/EXIT callbacks from GeofenceReceiver when app is foregrounded.
+      await Workmanager().initialize(callbackDispatcher);
+      await _registerNativeFence(clockNo);
       _channel.setMethodCallHandler(_handleNativeGeofenceEvent);
 
-      // Pre-initialize WorkManager so schedule/cancel calls work immediately.
-      await Workmanager().initialize(callbackDispatcher);
+      // Flush any presence writes that failed in a no-signal pocket.
+      final prefs = await SharedPreferences.getInstance();
+      await _flushPendingPresence(prefs);
 
-      _isInitialized = true;
-      debugPrint('✅ Native geofence monitoring started');
+      if (!_isInitialized || force) {
+        _isInitialized = true;
+        debugPrint('✅ Native geofence monitoring started (force=$force)');
+      }
     } catch (e) {
       debugPrint('❌ Native monitoring start failed: $e');
     }
+  }
+
+  Future<void> _registerNativeFence(String clockNo) async {
+    final cfg = await loadGeofenceConfig();
+    await _channel.invokeMethod('registerGeofence', {
+      'clockNo': clockNo,
+      'lat': cfg.latitude,
+      'lng': cfg.longitude,
+      // Outer band for native EXIT hysteresis; enter/stay precision is enforced
+      // by polling (app-open + WorkManager) using the real radius.
+      'radius': cfg.radius + kGeofenceHysteresisMargin,
+    });
+    debugPrint('✅ Native geofence registered');
   }
 
   Future<void> stopNativeMonitoring() async {
@@ -202,16 +494,11 @@ class LocationService {
     } catch (e) {
       debugPrint('stopGeofence error (non-fatal): $e');
     }
-    await _stopWorkManagerCheck();
+    await _stopAllBackgroundLocation();
     _isInitialized = false;
     debugPrint('🛑 Native monitoring stopped');
   }
 
-  // ---------------------------------------------------------------------------
-  // Native geofence callback (foreground only — app must be running).
-  // Firestore is already updated by GeofenceReceiver.kt on both foreground and
-  // background. This handler manages the local notification and WorkManager.
-  // ---------------------------------------------------------------------------
   Future<void> _handleNativeGeofenceEvent(MethodCall call) async {
     if (call.method != 'onGeofenceEvent') return;
 
@@ -220,123 +507,160 @@ class LocationService {
 
     await _sendNotification(isEntering);
 
-    // Foreground fallback: GeofenceReceiver.kt writes presence itself, but if
-    // that direct write is ever denied/failed, correct it through the CF. The CF
-    // is transition-aware, so this is a no-op when the native write already
-    // landed (and therefore logs nothing in the normal case).
-    await _firestoreService.updateMyPresence(
-        isOnSite: isEntering, source: 'native_geofence_fg');
+    final prefs = await SharedPreferences.getInstance();
+    await _writePresenceOrQueue(
+      prefs: prefs,
+      firestore: _firestoreService,
+      isOnSite: isEntering,
+      source: 'native_geofence_fg',
+      eventType: isEntering ? 'enter' : 'exit',
+    );
+    await prefs.setBool(_prefsLastKnownOnSite, isEntering);
 
     if (isEntering) {
-      // Employee arrived — start the 30-min on-site heartbeat check.
-      await _startWorkManagerCheck();
+      await _startOnsiteMonitoring(boost: true);
     } else {
-      // Employee left — stop the heartbeat, nothing to check until next ENTER.
-      await _stopWorkManagerCheck();
+      await _startOffsiteReconcileOnly();
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // App-open location check — called each time the app comes to the foreground.
-  // Compares the current GPS position against the Firestore isOnSite value and
-  // corrects it if they disagree (catches missed geofence events).
-  // Also syncs WorkManager: running only when on-site.
-  // ---------------------------------------------------------------------------
-  /// Returns the resolved on-site state after the GPS check, or null when the
-  /// check could not run (web, no clock number, GPS error).
+  /// App-open / resume GPS check. Returns resolved on-site state, or **null**
+  /// when GPS fails (dead zone) so UI must not force a flip.
   Future<bool?> checkCurrentLocation() async {
-    // The web build has no geofence and never writes presence — mobile is the
-    // sole source of truth. Guard so the web build doesn't prompt for location.
     if (kIsWeb) return null;
     try {
       debugPrint('📍 checkCurrentLocation() called');
 
-      final cfg = await loadGeofenceConfig();
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 30),
-        ),
-      );
-
-      final dist = Geolocator.distanceBetween(
-          cfg.latitude, cfg.longitude, pos.latitude, pos.longitude);
-
       final prefs = await SharedPreferences.getInstance();
-      final clockNo = prefs.getString('loggedInClockNo');
+      await _flushPendingPresence(prefs);
+
+      final clockNo = prefs.getString('loggedInClockNo') ?? _clockNo;
       if (clockNo == null) return null;
 
+      // Ensure fence is registered whenever we have Always location.
+      final always = await ph.Permission.locationAlways.status;
+      if (always.isGranted) {
+        await startNativeMonitoring(clockNo, force: true);
+      }
+
+      final cfg = await loadGeofenceConfig();
+
+      Position pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 30),
+          ),
+        );
+      } catch (e) {
+        // Dead zone: do not change isOnSite; keep existing schedules.
+        debugPrint('❌ checkCurrentLocation GPS failed (sticky): $e');
+        return null;
+      }
+
+      final dist = Geolocator.distanceBetween(
+        cfg.latitude,
+        cfg.longitude,
+        pos.latitude,
+        pos.longitude,
+      );
+
       final emp = await _firestoreService.getEmployee(clockNo);
-      if (emp == null) return null;
+      final currentlyOnSite = emp?.isOnSite ??
+          prefs.getBool(_prefsLastKnownOnSite) ??
+          false;
 
-      // Hysteresis dead-band (see callbackDispatcher) — sticky presence so a
-      // single jittery fix near the boundary can't flip isOnSite.
-      final onSite = emp.isOnSite
-          ? dist <= cfg.radius + kGeofenceHysteresisMargin
-          : dist <= cfg.radius;
-      debugPrint('📍 App-open check → dist=${dist.toStringAsFixed(0)} onSite=$onSite');
+      final decided = resolveOnSiteFromFix(
+        currentlyOnSite: currentlyOnSite,
+        distM: dist,
+        radiusM: cfg.radius,
+        accuracyM: pos.accuracy,
+      );
 
-      if (emp.isOnSite != onSite) {
-        // Firestore disagrees with GPS — a geofence event was missed. Correct it
-        // via the CF (which stamps timestamps + logs the enter/exit).
-        await _firestoreService.updateMyPresence(
-            isOnSite: onSite, source: 'app_open_check');
-        debugPrint('📍 App-open check: corrected isOnSite to $onSite');
+      debugPrint(
+        '📍 App-open check → dist=${dist.toStringAsFixed(0)} '
+        'acc=${pos.accuracy.toStringAsFixed(0)} decided=$decided '
+        '(was $currentlyOnSite)',
+      );
+
+      if (decided == null) {
+        // Unusable fix — leave presence and schedules alone.
+        return currentlyOnSite;
       }
 
-      // Sync WorkManager with the actual on-site state regardless of whether
-      // Firestore changed. If the app was restarted, WorkManager may need to be
-      // re-scheduled (on-site) or confirmed-cancelled (off-site).
-      if (onSite) {
-        await _startWorkManagerCheck();
+      if (currentlyOnSite != decided) {
+        await _writePresenceOrQueue(
+          prefs: prefs,
+          firestore: _firestoreService,
+          isOnSite: decided,
+          source: 'app_open_check',
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+          radiusUsed: cfg.radius,
+          eventType: decided ? 'enter' : 'exit',
+        );
+        debugPrint('📍 App-open check: corrected isOnSite to $decided');
+      } else if (decided && pos.accuracy <= kMaxAccuracyForCheckProofM) {
+        // Breadcrumb while already on-site (helps 2h stale window).
+        await _writeCheckOrQueue(
+          prefs: prefs,
+          firestore: _firestoreService,
+          clockNo: clockNo,
+          source: 'app_open_check',
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+          radiusUsed: cfg.radius,
+        );
+      }
+
+      await prefs.setBool(_prefsLastKnownOnSite, decided);
+
+      if (decided) {
+        await _startOnsiteMonitoring(boost: currentlyOnSite != decided);
       } else {
-        await _stopWorkManagerCheck();
+        await _startOffsiteReconcileOnly();
       }
-      return onSite;
+      return decided;
     } catch (e) {
       debugPrint('❌ checkCurrentLocation failed: $e');
       return null;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // WorkManager helpers
-  // ---------------------------------------------------------------------------
-
-  Future<void> _startWorkManagerCheck() async {
+  Future<void> _startOnsiteMonitoring({required bool boost}) async {
     try {
-      await Workmanager().initialize(callbackDispatcher);
-      await Workmanager().registerPeriodicTask(
-        locationTaskName,
-        locationTaskName,
-        frequency: const Duration(minutes: 30),
-        // KEEP: if already scheduled, leave it alone — don't reset the 30-min timer.
-        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-          requiresBatteryNotLow: false,
-        ),
-      );
-      debugPrint('📍 WorkManager 30-min on-site check scheduled');
+      await _wmStartOnsiteHeartbeat(rescheduleBoost: boost);
+      await Workmanager().cancelByUniqueName(offsiteReconcileTaskName);
+      debugPrint('📍 On-site heartbeat active (boost=$boost)');
     } catch (e) {
-      debugPrint('WorkManager start error (non-fatal): $e');
+      debugPrint('On-site WorkManager error (non-fatal): $e');
     }
   }
 
-  Future<void> _stopWorkManagerCheck() async {
+  Future<void> _startOffsiteReconcileOnly() async {
     try {
       await Workmanager().initialize(callbackDispatcher);
       await Workmanager().cancelByUniqueName(locationTaskName);
-      debugPrint('🛑 WorkManager 30-min check stopped');
+      await _wmCancelBoosts();
+      await _wmStartOffsiteReconcile();
     } catch (e) {
-      debugPrint('WorkManager stop error (non-fatal): $e');
+      debugPrint('Off-site reconcile schedule error (non-fatal): $e');
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Shared helpers
-  // ---------------------------------------------------------------------------
+  Future<void> _stopAllBackgroundLocation() async {
+    try {
+      await Workmanager().initialize(callbackDispatcher);
+      await Workmanager().cancelByUniqueName(locationTaskName);
+      await Workmanager().cancelByUniqueName(offsiteReconcileTaskName);
+      await _wmCancelBoosts();
+    } catch (e) {
+      debugPrint('Stop background location error (non-fatal): $e');
+    }
+  }
 
   Future<void> _sendNotification(bool onSite) async {
     final title = onSite ? '✅ Arrived On-Site' : '📍 Left Site Area';
@@ -347,14 +671,10 @@ class LocationService {
   }
 
   Future<void> _requestPermissions() async {
-    // Android 10+ requires locationWhenInUse to be granted before locationAlways
-    // can be requested. Skipping this step causes the system dialog to be
-    // suppressed silently on many devices.
     final whenInUse = await ph.Permission.locationWhenInUse.status;
     if (!whenInUse.isGranted) {
       await ph.Permission.locationWhenInUse.request();
     }
-    // Only request "always" after the foreground permission is in place.
     final always = await ph.Permission.locationAlways.status;
     if (!always.isGranted) {
       await ph.Permission.locationAlways.request();
@@ -364,8 +684,10 @@ class LocationService {
     }
   }
 
-  Future<void> logTestGeoFenceEvent(
-      {required bool isEntering, String? notes}) async {
+  Future<void> logTestGeoFenceEvent({
+    required bool isEntering,
+    String? notes,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     _clockNo ??= prefs.getString('loggedInClockNo');
     if (_clockNo == null) return;
@@ -373,7 +695,9 @@ class LocationService {
     final emp = await _firestoreService.getEmployee(_clockNo!);
     if (emp != null) {
       await _firestoreService.updateMyPresence(
-          isOnSite: isEntering, source: 'manual_test');
+        isOnSite: isEntering,
+        source: 'manual_test',
+      );
     }
     await _firestoreService.logGeoFenceEvent(
       clockNo: _clockNo!,
@@ -381,6 +705,12 @@ class LocationService {
       source: 'manual_test',
       notes: notes ?? 'Manual test from Diagnostics screen',
     );
+    await prefs.setBool(_prefsLastKnownOnSite, isEntering);
     await _sendNotification(isEntering);
+    if (isEntering) {
+      await _startOnsiteMonitoring(boost: true);
+    } else {
+      await _startOffsiteReconcileOnly();
+    }
   }
 }

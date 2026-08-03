@@ -296,7 +296,10 @@ class FirestoreService {
   /// call through — geofence transitions and stale-clear corrections must not
   /// be cached. Pass [force] after login/registration if a non-presence field
   /// must be re-pushed regardless of TTL.
-  Future<void> updateMyPresence({
+  /// Returns `true` when the callable succeeded or was a deliberate no-op skip.
+  /// Returns `false` on network/CF failure so location can queue a retry
+  /// (factory no-signal pockets).
+  Future<bool> updateMyPresence({
     String? fcmToken,
     bool? isOnSite,
     Map<String, dynamic>? permissions,
@@ -321,7 +324,7 @@ class FirestoreService {
     if (notificationDelivery != null) {
       payload['notificationDelivery'] = notificationDelivery;
     }
-    if (payload.isEmpty) return;
+    if (payload.isEmpty) return true;
     // `source` tags the presence change in app_geofence (the CF logs the
     // enter/exit). Only meaningful alongside an isOnSite change.
     if (source != null && isOnSite != null) payload['source'] = source;
@@ -339,7 +342,7 @@ class FirestoreService {
           'updateMyPresence skipped (non-presence unchanged, '
           'age=${DateTime.now().difference(_lastNonPresenceSuccessAt!).inMinutes}m)',
         );
-        return;
+        return true;
       }
     }
 
@@ -350,8 +353,10 @@ class FirestoreService {
       if (!includesOnSite) {
         await _rememberNonPresenceSync(PresenceSyncSkip.fingerprint(payload));
       }
+      return true;
     } catch (e) {
       debugPrint('updateMyPresence failed (non-fatal): $e');
+      return false;
     }
   }
 
@@ -1765,7 +1770,8 @@ class FirestoreService {
   // transitions routed through the CF are logged server-side by
   // updateEmployeePresence; native enter/exit are logged by GeofenceReceiver.kt
   // directly.
-  Future<void> logGeoFenceEvent({
+  /// Returns `true` on success so callers can queue a retry offline.
+  Future<bool> logGeoFenceEvent({
     required String clockNo,
     required String eventType, // 'enter' | 'exit' | 'check'
     required String source,    // 'workmanager_30min', 'app_open_check', 'manual_test', 'admin_manual', …
@@ -1789,8 +1795,10 @@ class FirestoreService {
         'createdAt': FieldValue.serverTimestamp(),
       });
       debugPrint('📍 [app_geofence] $eventType logged for $clockNo via $source');
+      return true;
     } catch (e) {
       debugPrint('❌ Failed to log geofence event: $e');
+      return false;
     }
   }
 }
