@@ -25,6 +25,16 @@ class WasteItem {
   final bool isQuantityOnly;
   /// Snapshot of WasteType.noSiteWeight — weight confirmed at weighbridge, not on-site.
   final bool isNoSiteWeight;
+  /// Snapshot of WasteType.isFixedTareDualBin (e.g. Copper Skins).
+  final bool isFixedTareDualBin;
+  /// Full Bin 1 weight on scale (kg). Dual-bin only.
+  final double? grossBin1Kg;
+  /// Full Bin 2 weight on scale (kg). Dual-bin only.
+  final double? grossBin2Kg;
+  /// Empty Bin 1 tare snapshotted from settings at capture (kg). Dual-bin only.
+  final double? tareBin1Kg;
+  /// Empty Bin 2 tare snapshotted from settings at capture (kg). Dual-bin only.
+  final double? tareBin2Kg;
 
   const WasteItem({
     this.id,
@@ -40,6 +50,11 @@ class WasteItem {
     this.ratePerKg,
     this.isQuantityOnly = false,
     this.isNoSiteWeight = false,
+    this.isFixedTareDualBin = false,
+    this.grossBin1Kg,
+    this.grossBin2Kg,
+    this.tareBin1Kg,
+    this.tareBin2Kg,
   });
 
   /// Line value: for quantity-only items uses qty × rate; for weight-based uses kg × rate.
@@ -68,6 +83,11 @@ class WasteItem {
       ratePerKg: (data['rate_per_kg'] as num?)?.toDouble(),
       isQuantityOnly: data['is_quantity_only'] as bool? ?? false,
       isNoSiteWeight: data['is_no_site_weight'] as bool? ?? false,
+      isFixedTareDualBin: data['is_fixed_tare_dual_bin'] as bool? ?? false,
+      grossBin1Kg: (data['gross_bin1_kg'] as num?)?.toDouble(),
+      grossBin2Kg: (data['gross_bin2_kg'] as num?)?.toDouble(),
+      tareBin1Kg: (data['tare_bin1_kg'] as num?)?.toDouble(),
+      tareBin2Kg: (data['tare_bin2_kg'] as num?)?.toDouble(),
     );
   }
 
@@ -85,6 +105,11 @@ class WasteItem {
       if (ratePerKg != null) 'rate_per_kg': ratePerKg,
       'is_quantity_only': isQuantityOnly,
       'is_no_site_weight': isNoSiteWeight,
+      'is_fixed_tare_dual_bin': isFixedTareDualBin,
+      if (grossBin1Kg != null) 'gross_bin1_kg': grossBin1Kg,
+      if (grossBin2Kg != null) 'gross_bin2_kg': grossBin2Kg,
+      if (tareBin1Kg != null) 'tare_bin1_kg': tareBin1Kg,
+      if (tareBin2Kg != null) 'tare_bin2_kg': tareBin2Kg,
     };
   }
 
@@ -103,6 +128,11 @@ class WasteItem {
     bool clearRatePerKg = false,
     bool? isQuantityOnly,
     bool? isNoSiteWeight,
+    bool? isFixedTareDualBin,
+    double? grossBin1Kg,
+    double? grossBin2Kg,
+    double? tareBin1Kg,
+    double? tareBin2Kg,
   }) {
     return WasteItem(
       id: id ?? this.id,
@@ -118,6 +148,11 @@ class WasteItem {
       ratePerKg: clearRatePerKg ? null : (ratePerKg ?? this.ratePerKg),
       isQuantityOnly: isQuantityOnly ?? this.isQuantityOnly,
       isNoSiteWeight: isNoSiteWeight ?? this.isNoSiteWeight,
+      isFixedTareDualBin: isFixedTareDualBin ?? this.isFixedTareDualBin,
+      grossBin1Kg: grossBin1Kg ?? this.grossBin1Kg,
+      grossBin2Kg: grossBin2Kg ?? this.grossBin2Kg,
+      tareBin1Kg: tareBin1Kg ?? this.tareBin1Kg,
+      tareBin2Kg: tareBin2Kg ?? this.tareBin2Kg,
     );
   }
 }

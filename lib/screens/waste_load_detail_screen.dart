@@ -27,6 +27,7 @@ import '../services/waste_service.dart';
 import '../utils/waste_save_messages.dart';
 
 import '../widgets/waste_add_item_sheet.dart';
+import '../widgets/waste_copper_skins_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../utils/screen_insets.dart';
 
@@ -324,6 +325,9 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
   Set<String> get _noSiteWeightTypeNames =>
       _wasteTypes.where((t) => t.noSiteWeight).map((t) => t.mainType).toSet();
 
+  bool get _isCopperSkinsLoad =>
+      mainTypeIsFixedTareDualBin(_currentLoad.mainWasteType, _wasteTypes);
+
   Map<String, String> get _quantityLabelByType => {
         for (final t in _wasteTypes)
           if (t.isQuantityOnly || t.noSiteWeight)
@@ -332,6 +336,68 @@ class _WasteLoadDetailScreenState extends ConsumerState<WasteLoadDetailScreen> {
 
   Future<void> _addItem() async {
     if (!guardPersonaSubmit(context)) return;
+
+    if (_isCopperSkinsLoad) {
+      final settings = await _wasteService.getWasteSettings();
+      if (!mounted) return;
+      final skinsResult =
+          await showModalBottomSheet<WasteCopperSkinsItemSheetResult>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: WasteCopperSkinsItemSheet(
+              subtype: _currentLoad.mainWasteType.isNotEmpty
+                  ? _currentLoad.mainWasteType
+                  : 'Copper Skins',
+              tareBin1Kg: settings.copperSkinsBin1TareKg,
+              tareBin2Kg: settings.copperSkinsBin2TareKg,
+              photosRequired: _photosRequired,
+            ),
+          ),
+        ),
+      );
+      if (skinsResult == null || !mounted) return;
+      setState(() => _isSaving = true);
+      try {
+        final addResult = await _wasteService.addItemToExistingLoad(
+          loadId: _currentLoad.id!,
+          subtype: skinsResult.subtype,
+          weightKg: skinsResult.weightKg,
+          quantity: skinsResult.quantity,
+          notes: skinsResult.notes,
+          localPhotoPaths: skinsResult.localPhotoPaths,
+          isFixedTareDualBin: true,
+          grossBin1Kg: skinsResult.grossBin1Kg,
+          grossBin2Kg: skinsResult.grossBin2Kg,
+          tareBin1Kg: skinsResult.tareBin1Kg,
+          tareBin2Kg: skinsResult.tareBin2Kg,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(WasteSaveMessages.addItemSaved(
+                queuedOps: addResult.queuedOps,
+              )),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to add item: $e'), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
+      return;
+    }
+
     final typeNames = _wasteTypes.map((t) => t.mainType).toList();
     final result = await showModalBottomSheet<WasteAddItemSheetResult>(
       context: context,

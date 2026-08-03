@@ -4,10 +4,12 @@ import '../models/waste_type.dart';
 
 /// Routing and measurement rules for waste types.
 ///
-/// Two special flags on [WasteType] drive the load lifecycle:
+/// Flags on [WasteType] drive the load lifecycle:
 /// - [WasteType.isQuantityOnly]: priced per unit; weighbridge is skipped entirely.
 /// - [WasteType.noSiteWeight]: guard records quantity only; certified weight
 ///   arrives later at the off-site weighbridge.
+/// - [WasteType.isFixedTareDualBin]: guard records two full-bin grosses; net =
+///   G1+G2−T1−T2 from settings; weighbridge still required (client ticket).
 WasteType? findWasteTypeByName(String? name, List<WasteType> allTypes) {
   if (name == null || name.isEmpty) return null;
   for (final t in allTypes) {
@@ -21,10 +23,18 @@ bool typeSkipsWeighbridge(WasteType type) => type.isQuantityOnly;
 
 bool typeHasNoSiteWeight(WasteType type) => type.noSiteWeight;
 
+bool typeIsFixedTareDualBin(WasteType type) => type.isFixedTareDualBin;
+
 /// True when the load's main type is quantity-only (e.g. IBC Bins).
 bool mainTypeSkipsWeighbridge(String mainWasteType, List<WasteType> allTypes) {
   final type = findWasteTypeByName(mainWasteType, allTypes);
   return type?.isQuantityOnly ?? false;
+}
+
+/// True when the load's main type uses fixed dual-bin tare capture (Copper Skins).
+bool mainTypeIsFixedTareDualBin(String mainWasteType, List<WasteType> allTypes) {
+  final type = findWasteTypeByName(mainWasteType, allTypes);
+  return type?.isFixedTareDualBin ?? false;
 }
 
 /// True when every collected item is quantity-only (mixed-load edge case).
@@ -43,8 +53,26 @@ bool loadSkipsWeighbridge({
   return itemsAllQuantityOnly(itemQuantityOnlyFlags);
 }
 
+/// Net copper-skins kg from two full-bin grosses and two fixed empty tares.
+///
+/// Returns null when inputs are invalid (missing/non-positive gross, non-positive
+/// tare, or non-positive net).
+double? copperSkinsNetKg({
+  required double grossBin1Kg,
+  required double grossBin2Kg,
+  required double tareBin1Kg,
+  required double tareBin2Kg,
+}) {
+  if (grossBin1Kg <= 0 || grossBin2Kg <= 0) return null;
+  if (tareBin1Kg <= 0 || tareBin2Kg <= 0) return null;
+  final net = (grossBin1Kg + grossBin2Kg) - (tareBin1Kg + tareBin2Kg);
+  if (net <= 0) return null;
+  return net;
+}
+
 /// Sum on-site recorded weight for deviation checks.
 /// Quantity-only and no-site-weight items contribute 0 at collection time.
+/// Fixed dual-bin items contribute their computed [weight_kg] (net).
 double sumRecordedWeightKg(Iterable<Map<String, dynamic>> itemsData) {
   var total = 0.0;
   for (final item in itemsData) {
@@ -72,6 +100,9 @@ double itemLineValue(WasteItem item, double ratePerUnit) {
 }
 
 String itemMeasureLabel(WasteItem item) {
+  if (item.isFixedTareDualBin) {
+    return '${item.weightKg.toStringAsFixed(1)} kg net';
+  }
   if (item.isQuantityOnly || item.isNoSiteWeight) {
     return '${item.quantity ?? 0} units';
   }
@@ -87,6 +118,12 @@ bool stockTypeIsQuantityOnly(String typeName, List<WasteType> allTypes) {
   final type = findWasteTypeByName(typeName, allTypes);
   if (type != null) return type.isQuantityOnly;
   return typeName == WasteStockTypes.ibcBins;
+}
+
+/// Dual-bin types do not use waste stock (skins accumulate in fixed bins).
+bool stockTypeIsFixedTareDualBin(String typeName, List<WasteType> allTypes) {
+  final type = findWasteTypeByName(typeName, allTypes);
+  return type?.isFixedTareDualBin ?? false;
 }
 
 String stockQuantityLabelFor(String typeName, List<WasteType> allTypes) {

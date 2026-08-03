@@ -834,6 +834,8 @@ class WasteService {
         now: now,
         extraItemFields: {
           'is_no_site_weight': itemsData[i]['is_no_site_weight'] == true,
+          'is_fixed_tare_dual_bin':
+              itemsData[i]['is_fixed_tare_dual_bin'] == true,
           'collection_submit_ref': submitRef,
         },
       );
@@ -1106,6 +1108,11 @@ class WasteService {
     String? sourceStockId,
     bool isQuantityOnly = false,
     bool isNoSiteWeight = false,
+    bool isFixedTareDualBin = false,
+    double? grossBin1Kg,
+    double? grossBin2Kg,
+    double? tareBin1Kg,
+    double? tareBin2Kg,
   }) async {
     _guardWrite();
     final itemId = _firestore.collection(Collections.wasteItems).doc().id;
@@ -1129,6 +1136,11 @@ class WasteService {
         'is_deleted': false,
         'is_quantity_only': isQuantityOnly,
         'is_no_site_weight': isNoSiteWeight,
+        'is_fixed_tare_dual_bin': isFixedTareDualBin,
+        if (grossBin1Kg != null) 'gross_bin1_kg': grossBin1Kg,
+        if (grossBin2Kg != null) 'gross_bin2_kg': grossBin2Kg,
+        if (tareBin1Kg != null) 'tare_bin1_kg': tareBin1Kg,
+        if (tareBin2Kg != null) 'tare_bin2_kg': tareBin2Kg,
         'createdAt': now.toIso8601String(),
       },
       documentId: itemId,
@@ -1659,7 +1671,10 @@ class WasteService {
     try {
       await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
         'isQuantityOnly': isQuantityOnly,
-        if (isQuantityOnly) 'noSiteWeight': false, // mutually exclusive
+        if (isQuantityOnly) ...{
+          'noSiteWeight': false,
+          'isFixedTareDualBin': false,
+        },
       });
     } catch (e) {
       throw Exception('Failed to update waste type: $e');
@@ -1672,7 +1687,29 @@ class WasteService {
     try {
       await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
         'noSiteWeight': noSiteWeight,
-        if (noSiteWeight) 'isQuantityOnly': false, // mutually exclusive
+        if (noSiteWeight) ...{
+          'isQuantityOnly': false,
+          'isFixedTareDualBin': false,
+        },
+      });
+    } catch (e) {
+      throw Exception('Failed to update waste type: $e');
+    }
+  }
+
+  /// Toggles the isFixedTareDualBin flag on an existing waste type (e.g. Copper Skins).
+  Future<void> setWasteTypeFixedTareDualBin(
+    String typeId,
+    bool isFixedTareDualBin,
+  ) async {
+    _guardWrite();
+    try {
+      await _firestore.collection(Collections.wasteTypes).doc(typeId).update({
+        'isFixedTareDualBin': isFixedTareDualBin,
+        if (isFixedTareDualBin) ...{
+          'isQuantityOnly': false,
+          'noSiteWeight': false,
+        },
       });
     } catch (e) {
       throw Exception('Failed to update waste type: $e');

@@ -8,15 +8,27 @@ class WasteSettings {
   final bool photosRequired;
   final bool signatureRequired;
 
+  /// Fixed empty weight of Copper Skins Bin 1 (kg). Used at collection only.
+  final double copperSkinsBin1TareKg;
+
+  /// Fixed empty weight of Copper Skins Bin 2 (kg). Used at collection only.
+  final double copperSkinsBin2TareKg;
+
   const WasteSettings({
     this.managerClockNos = const [],
     this.guardClockNos = const [],
     this.wasteEnabled = true,
     this.photosRequired = false,
     this.signatureRequired = false,
+    this.copperSkinsBin1TareKg = 0,
+    this.copperSkinsBin2TareKg = 0,
   });
 
   static const WasteSettings defaults = WasteSettings();
+
+  /// True when both Copper Skins bin tares are configured (> 0).
+  bool get copperSkinsTaresConfigured =>
+      copperSkinsBin1TareKg > 0 && copperSkinsBin2TareKg > 0;
 
   factory WasteSettings.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -32,6 +44,10 @@ class WasteSettings {
       wasteEnabled: data['waste_enabled'] as bool? ?? true,
       photosRequired: data['photos_required'] as bool? ?? false,
       signatureRequired: data['signature_required'] as bool? ?? false,
+      copperSkinsBin1TareKg:
+          (data['copper_skins_bin1_tare_kg'] as num?)?.toDouble() ?? 0,
+      copperSkinsBin2TareKg:
+          (data['copper_skins_bin2_tare_kg'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -42,6 +58,8 @@ class WasteSettings {
       'waste_enabled': wasteEnabled,
       'photos_required': photosRequired,
       'signature_required': signatureRequired,
+      'copper_skins_bin1_tare_kg': copperSkinsBin1TareKg,
+      'copper_skins_bin2_tare_kg': copperSkinsBin2TareKg,
     };
   }
 
@@ -51,6 +69,8 @@ class WasteSettings {
     bool? wasteEnabled,
     bool? photosRequired,
     bool? signatureRequired,
+    double? copperSkinsBin1TareKg,
+    double? copperSkinsBin2TareKg,
   }) {
     return WasteSettings(
       managerClockNos: managerClockNos ?? this.managerClockNos,
@@ -58,6 +78,10 @@ class WasteSettings {
       wasteEnabled: wasteEnabled ?? this.wasteEnabled,
       photosRequired: photosRequired ?? this.photosRequired,
       signatureRequired: signatureRequired ?? this.signatureRequired,
+      copperSkinsBin1TareKg:
+          copperSkinsBin1TareKg ?? this.copperSkinsBin1TareKg,
+      copperSkinsBin2TareKg:
+          copperSkinsBin2TareKg ?? this.copperSkinsBin2TareKg,
     );
   }
 }

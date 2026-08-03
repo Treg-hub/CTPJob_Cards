@@ -1,6 +1,7 @@
 import '../models/waste_stock_item.dart';
 import '../models/waste_stock_source.dart';
 import '../models/waste_type.dart';
+import 'waste_type_routing.dart';
 
 /// Parent [waste_type] on legacy stock records for paper-family material.
 const kPaperWasteStockParent = 'Paper Waste';
@@ -139,6 +140,8 @@ List<WasteStockItem> applyCopperWasteVisibilityThreshold(
 /// Loads that support linking on-site stock at collection (not only at schedule).
 bool loadCanLinkOnSiteStock(String? mainWasteType, List<WasteType> allTypes) {
   if (mainWasteType == null || mainWasteType.isEmpty) return false;
+  // Copper Skins (fixed dual-bin tare): no stock staging.
+  if (mainTypeIsFixedTareDualBin(mainWasteType, allTypes)) return false;
   if (loadUsesPaperStock(mainWasteType, allTypes)) return true;
   if (mainWasteType == WasteStockTypes.ibcBins) return true;
   if (loadUsesCopperStock(mainWasteType)) return true;

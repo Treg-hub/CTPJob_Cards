@@ -66,6 +66,13 @@ abstract final class WasteBeginCollectionDraft {
           'linked_ibc_numbers': entry['linked_ibc_numbers'],
           'is_quantity_only': entry['is_quantity_only'] == true,
           'is_no_site_weight': entry['is_no_site_weight'] == true,
+          'is_fixed_tare_dual_bin': entry['is_fixed_tare_dual_bin'] == true,
+          if (entry['gross_bin1_kg'] != null)
+            'gross_bin1_kg': entry['gross_bin1_kg'],
+          if (entry['gross_bin2_kg'] != null)
+            'gross_bin2_kg': entry['gross_bin2_kg'],
+          if (entry['tare_bin1_kg'] != null) 'tare_bin1_kg': entry['tare_bin1_kg'],
+          if (entry['tare_bin2_kg'] != null) 'tare_bin2_kg': entry['tare_bin2_kg'],
         });
       }
       String? signaturePath;

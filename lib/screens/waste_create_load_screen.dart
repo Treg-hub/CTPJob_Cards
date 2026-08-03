@@ -20,6 +20,7 @@ import '../utils/role.dart' as role_utils;
 import '../utils/waste_stock_mapping.dart';
 import '../utils/waste_type_routing.dart';
 import '../widgets/waste_add_item_sheet.dart';
+import '../widgets/waste_copper_skins_item_sheet.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../main.dart' show currentEmployee;
 import '../theme/app_theme.dart';
@@ -214,6 +215,10 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   Set<String> get _noSiteWeightTypeNames =>
       _wasteTypes.where((t) => t.noSiteWeight).map((t) => t.mainType).toSet();
 
+  bool get _selectedIsCopperSkinsOnly =>
+      _selectedTypes.length == 1 &&
+      _selectedTypes.first.isFixedTareDualBin;
+
   Map<String, String> get _quantityLabelByType {
     final map = <String, String>{};
     for (final t in _wasteTypes) {
@@ -285,8 +290,11 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
           .map((t) => t.mainType)
           .toSet();
       _items.removeWhere((item) => !allowed.contains(item.subtype));
+      // Auto-select contractor types except dual-bin (Copper Skins must be alone).
       for (final type in _availableTypes) {
-        if (type.id != null) _selectedTypeIds.add(type.id!);
+        if (type.id != null && !type.isFixedTareDualBin) {
+          _selectedTypeIds.add(type.id!);
+        }
       }
     });
     _refreshStockForSelection();
@@ -300,7 +308,20 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
         _selectedTypeIds.remove(type.id);
         _items.removeWhere((item) => item.subtype == type.mainType);
         _pruneStockSelection();
+      } else if (type.isFixedTareDualBin) {
+        // Copper Skins must be skins-only — exclusive selection.
+        _selectedTypeIds
+          ..clear()
+          ..add(type.id!);
+        _items.clear();
+        _selectedStockIds.clear();
       } else {
+        // Drop any dual-bin type if mixing other waste.
+        _selectedTypeIds.removeWhere((id) {
+          final t = _availableTypes.where((x) => x.id == id).firstOrNull;
+          return t?.isFixedTareDualBin == true;
+        });
+        _items.removeWhere((item) => item.isFixedTareDualBin);
         _selectedTypeIds.add(type.id!);
       }
     });
@@ -648,6 +669,59 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
 
   Future<void> _addNewItem() async {
     if (!guardPersonaSubmit(context)) return;
+
+    if (_selectedIsCopperSkinsOnly) {
+      if (_items.any((i) => i.isFixedTareDualBin)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Copper Skins already has Bin 1 + Bin 2 weights. Remove the existing line to re-enter.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      final settings = _wasteSettings ?? WasteSettings.defaults;
+      final skinsResult =
+          await showModalBottomSheet<WasteCopperSkinsItemSheetResult>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: WasteCopperSkinsItemSheet(
+              subtype: _selectedTypes.first.mainType,
+              tareBin1Kg: settings.copperSkinsBin1TareKg,
+              tareBin2Kg: settings.copperSkinsBin2TareKg,
+              photosRequired: _wasteSettings?.photosRequired ?? false,
+            ),
+          ),
+        ),
+      );
+      if (skinsResult != null && mounted) {
+        setState(() {
+          _items.add(WasteItem(
+            loadId: 'temp',
+            subtype: skinsResult.subtype,
+            weightKg: skinsResult.weightKg,
+            quantity: skinsResult.quantity,
+            notes: skinsResult.notes,
+            photos: List<String>.from(skinsResult.localPhotoPaths),
+            isFixedTareDualBin: true,
+            grossBin1Kg: skinsResult.grossBin1Kg,
+            grossBin2Kg: skinsResult.grossBin2Kg,
+            tareBin1Kg: skinsResult.tareBin1Kg,
+            tareBin2Kg: skinsResult.tareBin2Kg,
+          ));
+        });
+        _persistDraft();
+      }
+      return;
+    }
+
     final typeNames =
         itemSubtypeOptionsForChips(_selectedTypes, _wasteTypes);
     final result = await showModalBottomSheet<WasteAddItemSheetResult>(
@@ -760,6 +834,11 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
           'localPhotos': item.photos,
           'is_quantity_only': item.isQuantityOnly,
           'is_no_site_weight': item.isNoSiteWeight,
+          'is_fixed_tare_dual_bin': item.isFixedTareDualBin,
+          if (item.grossBin1Kg != null) 'gross_bin1_kg': item.grossBin1Kg,
+          if (item.grossBin2Kg != null) 'gross_bin2_kg': item.grossBin2Kg,
+          if (item.tareBin1Kg != null) 'tare_bin1_kg': item.tareBin1Kg,
+          if (item.tareBin2Kg != null) 'tare_bin2_kg': item.tareBin2Kg,
         }).toList(),
         selectedStockIds: _selectedStockIds,
         selectedStockSnapshots: _stockSnapshotsForSave(),

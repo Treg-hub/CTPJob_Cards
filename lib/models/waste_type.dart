@@ -11,9 +11,15 @@ class WasteType {
   /// Weight field is hidden; quantity is required. Weighbridge step is skipped.
   final bool isQuantityOnly;
 
-  /// True for types too large to weigh on-site (e.g. compactor bins, copper skins).
+  /// True for types too large to weigh on-site (e.g. compactor bins).
   /// Guard records quantity; weight field is hidden. Weighbridge step is still required.
   final bool noSiteWeight;
+
+  /// True for fixed two-bin tare types (e.g. Copper Skins).
+  /// Guard records full gross for Bin 1 and Bin 2; net = G1+G2−T1−T2 from settings.
+  /// Weighbridge step is still required (client ticket). Mutually exclusive with
+  /// [isQuantityOnly] and [noSiteWeight].
+  final bool isFixedTareDualBin;
 
   const WasteType({
     this.id,
@@ -22,6 +28,7 @@ class WasteType {
     this.quantityLabels = const {},
     this.isQuantityOnly = false,
     this.noSiteWeight = false,
+    this.isFixedTareDualBin = false,
   });
 
   /// Returns the dynamic quantity label for a given subtype.
@@ -44,6 +51,7 @@ class WasteType {
           const {},
       isQuantityOnly: data['isQuantityOnly'] as bool? ?? false,
       noSiteWeight: data['noSiteWeight'] as bool? ?? false,
+      isFixedTareDualBin: data['isFixedTareDualBin'] as bool? ?? false,
     );
   }
 
@@ -53,5 +61,6 @@ class WasteType {
         'quantityLabels': quantityLabels,
         'isQuantityOnly': isQuantityOnly,
         'noSiteWeight': noSiteWeight,
+        'isFixedTareDualBin': isFixedTareDualBin,
       };
 }

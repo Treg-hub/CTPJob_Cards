@@ -71,6 +71,11 @@ abstract final class WasteCreateLoadDraft {
                 'photos': item.photos,
                 'is_quantity_only': item.isQuantityOnly,
                 'is_no_site_weight': item.isNoSiteWeight,
+                'is_fixed_tare_dual_bin': item.isFixedTareDualBin,
+                if (item.grossBin1Kg != null) 'gross_bin1_kg': item.grossBin1Kg,
+                if (item.grossBin2Kg != null) 'gross_bin2_kg': item.grossBin2Kg,
+                if (item.tareBin1Kg != null) 'tare_bin1_kg': item.tareBin1Kg,
+                if (item.tareBin2Kg != null) 'tare_bin2_kg': item.tareBin2Kg,
               })
           .toList(),
       'saved_at': DateTime.now().toIso8601String(),
@@ -99,6 +104,11 @@ abstract final class WasteCreateLoadDraft {
           photos: photos,
           isQuantityOnly: entry['is_quantity_only'] == true,
           isNoSiteWeight: entry['is_no_site_weight'] == true,
+          isFixedTareDualBin: entry['is_fixed_tare_dual_bin'] == true,
+          grossBin1Kg: (entry['gross_bin1_kg'] as num?)?.toDouble(),
+          grossBin2Kg: (entry['gross_bin2_kg'] as num?)?.toDouble(),
+          tareBin1Kg: (entry['tare_bin1_kg'] as num?)?.toDouble(),
+          tareBin2Kg: (entry['tare_bin2_kg'] as num?)?.toDouble(),
         ));
       }
       return WasteCreateLoadDraftData(

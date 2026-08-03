@@ -118,8 +118,11 @@ class _WasteScheduleLoadScreenState
       _onSiteStock = [];
       _selectedStockIds.clear();
       if (contractor != null) {
+        // Auto-select contractor types except dual-bin (Copper Skins must be alone).
         for (final type in _availableTypes) {
-          if (type.id != null) _selectedTypeIds.add(type.id!);
+          if (type.id != null && !type.isFixedTareDualBin) {
+            _selectedTypeIds.add(type.id!);
+          }
         }
       }
     });
@@ -132,7 +135,17 @@ class _WasteScheduleLoadScreenState
       if (_selectedTypeIds.contains(type.id)) {
         _selectedTypeIds.remove(type.id);
         _pruneStockSelection();
+      } else if (type.isFixedTareDualBin) {
+        // Copper Skins must be skins-only — exclusive selection.
+        _selectedTypeIds
+          ..clear()
+          ..add(type.id!);
+        _selectedStockIds.clear();
       } else {
+        _selectedTypeIds.removeWhere((id) {
+          final t = _availableTypes.where((x) => x.id == id).firstOrNull;
+          return t?.isFixedTareDualBin == true;
+        });
         _selectedTypeIds.add(type.id!);
       }
     });

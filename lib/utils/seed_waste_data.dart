@@ -53,8 +53,8 @@ Future<void> seedWasteData() async {
     {
       'mainType': 'Copper Skins',
       'subtypes': [],
-      'quantityLabels': {'default': 'Quantity (skins)'},
-      'noSiteWeight': true,
+      'quantityLabels': {'default': 'Quantity (bins)'},
+      'isFixedTareDualBin': true,
     },
     {'mainType': 'IBC Bins', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (bins)'}, 'isQuantityOnly': true},
   ];

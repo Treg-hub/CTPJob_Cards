@@ -24,6 +24,7 @@ import '../utils/role.dart' as role_utils;
 import '../utils/waste_stock_mapping.dart';
 import '../utils/waste_type_routing.dart';
 import '../widgets/waste_add_item_sheet.dart';
+import '../widgets/waste_copper_skins_item_sheet.dart';
 import '../widgets/waste_app_bar.dart';
 import '../widgets/waste_stock_link_sheet.dart';
 import '../utils/screen_insets.dart';
@@ -171,6 +172,11 @@ class _WasteBeginCollectionScreenState
                 ),
                 isQuantityOnly: m['is_quantity_only'] == true,
                 isNoSiteWeight: m['is_no_site_weight'] == true,
+                isFixedTareDualBin: m['is_fixed_tare_dual_bin'] == true,
+                grossBin1Kg: (m['gross_bin1_kg'] as num?)?.toDouble(),
+                grossBin2Kg: (m['gross_bin2_kg'] as num?)?.toDouble(),
+                tareBin1Kg: (m['tare_bin1_kg'] as num?)?.toDouble(),
+                tareBin2Kg: (m['tare_bin2_kg'] as num?)?.toDouble(),
               )));
       }
     });
@@ -204,6 +210,11 @@ class _WasteBeginCollectionScreenState
                   'linked_ibc_numbers': i.linkedIbcNumbers,
                   'is_quantity_only': i.isQuantityOnly,
                   'is_no_site_weight': i.isNoSiteWeight,
+                  'is_fixed_tare_dual_bin': i.isFixedTareDualBin,
+                  if (i.grossBin1Kg != null) 'gross_bin1_kg': i.grossBin1Kg,
+                  if (i.grossBin2Kg != null) 'gross_bin2_kg': i.grossBin2Kg,
+                  if (i.tareBin1Kg != null) 'tare_bin1_kg': i.tareBin1Kg,
+                  if (i.tareBin2Kg != null) 'tare_bin2_kg': i.tareBin2Kg,
                 })
             .toList(),
       ),
@@ -253,6 +264,9 @@ class _WasteBeginCollectionScreenState
 
   Set<String> get _noSiteWeightTypeNames =>
       _wasteTypes.where((t) => t.noSiteWeight).map((t) => t.mainType).toSet();
+
+  bool get _isCopperSkinsLoad =>
+      mainTypeIsFixedTareDualBin(widget.load.mainWasteType, _wasteTypes);
 
   Map<String, String> get _quantityLabelByType => {
         for (final t in _wasteTypes)
@@ -439,6 +453,60 @@ class _WasteBeginCollectionScreenState
 
   Future<void> _addItem() async {
     if (!guardPersonaSubmit(context)) return;
+
+    // Copper Skins: fixed dual-bin form only; one skins line per load.
+    if (_isCopperSkinsLoad) {
+      if (_items.any((i) => i.isFixedTareDualBin)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Copper Skins already has Bin 1 + Bin 2 weights. Remove the existing line to re-enter.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      final settings = _wasteSettings ?? WasteSettings.defaults;
+      final skinsResult =
+          await showModalBottomSheet<WasteCopperSkinsItemSheetResult>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: WasteCopperSkinsItemSheet(
+              subtype: widget.load.mainWasteType.isNotEmpty
+                  ? widget.load.mainWasteType
+                  : 'Copper Skins',
+              tareBin1Kg: settings.copperSkinsBin1TareKg,
+              tareBin2Kg: settings.copperSkinsBin2TareKg,
+              photosRequired: _photosRequired,
+            ),
+          ),
+        ),
+      );
+      if (skinsResult != null && mounted) {
+        setState(() => _items.add(_ItemEntry(
+              subtype: skinsResult.subtype,
+              weightKg: skinsResult.weightKg,
+              quantity: skinsResult.quantity,
+              notes: skinsResult.notes,
+              photoPaths: skinsResult.localPhotoPaths,
+              isFixedTareDualBin: true,
+              grossBin1Kg: skinsResult.grossBin1Kg,
+              grossBin2Kg: skinsResult.grossBin2Kg,
+              tareBin1Kg: skinsResult.tareBin1Kg,
+              tareBin2Kg: skinsResult.tareBin2Kg,
+            )));
+        await _logOverrideIfNeeded([skinsResult.subtype]);
+        _persistDraft();
+      }
+      return;
+    }
+
     final typeNames = itemSubtypeOptionsForChips(_effectiveAllowedTypes, _wasteTypes);
 
     final result = await showModalBottomSheet<WasteAddItemSheetResult>(
@@ -515,6 +583,11 @@ class _WasteBeginCollectionScreenState
         'localPhotoPaths': i.photoPaths,
         'is_quantity_only': i.isQuantityOnly,
         'is_no_site_weight': i.isNoSiteWeight,
+        'is_fixed_tare_dual_bin': i.isFixedTareDualBin,
+        if (i.grossBin1Kg != null) 'gross_bin1_kg': i.grossBin1Kg,
+        if (i.grossBin2Kg != null) 'gross_bin2_kg': i.grossBin2Kg,
+        if (i.tareBin1Kg != null) 'tare_bin1_kg': i.tareBin1Kg,
+        if (i.tareBin2Kg != null) 'tare_bin2_kg': i.tareBin2Kg,
         if (i.stockId != null) 'source_stock_id': i.stockId,
       }).toList();
 
@@ -850,9 +923,12 @@ class _WasteBeginCollectionScreenState
                                 ],
                               ),
                               const SizedBox(height: 2),
-                              Text(item.isQuantityOnly
-                                  ? '${item.quantity ?? 0} ${_unitFor(item.subtype)}'
-                                  : '${item.weightKg.toStringAsFixed(1)} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
+                              Text(item.isFixedTareDualBin
+                                  ? 'Net ${item.weightKg.toStringAsFixed(1)} kg'
+                                      '${item.grossBin1Kg != null && item.grossBin2Kg != null ? ' (G ${item.grossBin1Kg!.toStringAsFixed(0)}+${item.grossBin2Kg!.toStringAsFixed(0)} − T ${item.tareBin1Kg?.toStringAsFixed(0) ?? '?'}+${item.tareBin2Kg?.toStringAsFixed(0) ?? '?'})' : ''}'
+                                  : item.isQuantityOnly
+                                      ? '${item.quantity ?? 0} ${_unitFor(item.subtype)}'
+                                      : '${item.weightKg.toStringAsFixed(1)} kg${item.quantity != null ? ' • qty ${item.quantity}' : ''}'),
                               if (_photosRequired && item.photoPaths.isEmpty &&
                                   !item.isQuantityOnly && !item.isNoSiteWeight)
                                 Text('⚠ Photo required',
@@ -1230,6 +1306,12 @@ class _ItemEntry {
   final bool isQuantityOnly;
   /// Mirrors WasteType.noSiteWeight — weight recorded at weighbridge, not on-site.
   final bool isNoSiteWeight;
+  /// Copper Skins dual-bin capture.
+  final bool isFixedTareDualBin;
+  final double? grossBin1Kg;
+  final double? grossBin2Kg;
+  final double? tareBin1Kg;
+  final double? tareBin2Kg;
 
   const _ItemEntry({
     required this.subtype,
@@ -1241,6 +1323,11 @@ class _ItemEntry {
     this.linkedIbcNumbers = const [],
     this.isQuantityOnly = false,
     this.isNoSiteWeight = false,
+    this.isFixedTareDualBin = false,
+    this.grossBin1Kg,
+    this.grossBin2Kg,
+    this.tareBin1Kg,
+    this.tareBin2Kg,
   });
 
   /// Create an entry from a pre-loaded stock item.
@@ -1269,6 +1356,11 @@ class _ItemEntry {
     List<String>? linkedIbcNumbers,
     bool? isQuantityOnly,
     bool? isNoSiteWeight,
+    bool? isFixedTareDualBin,
+    double? grossBin1Kg,
+    double? grossBin2Kg,
+    double? tareBin1Kg,
+    double? tareBin2Kg,
   }) {
     return _ItemEntry(
       subtype: subtype ?? this.subtype,
@@ -1280,6 +1372,11 @@ class _ItemEntry {
       linkedIbcNumbers: linkedIbcNumbers ?? this.linkedIbcNumbers,
       isQuantityOnly: isQuantityOnly ?? this.isQuantityOnly,
       isNoSiteWeight: isNoSiteWeight ?? this.isNoSiteWeight,
+      isFixedTareDualBin: isFixedTareDualBin ?? this.isFixedTareDualBin,
+      grossBin1Kg: grossBin1Kg ?? this.grossBin1Kg,
+      grossBin2Kg: grossBin2Kg ?? this.grossBin2Kg,
+      tareBin1Kg: tareBin1Kg ?? this.tareBin1Kg,
+      tareBin2Kg: tareBin2Kg ?? this.tareBin2Kg,
     );
   }
 }
