@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/impression_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/impression_app_bar.dart';
+import '../widgets/impression_tip_banner.dart';
 
 class ImpressionElectricalScreen extends StatefulWidget {
   final String cycleId;
@@ -78,20 +81,36 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
   @override
   Widget build(BuildContext context) {
     final d = widget.cycleData;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Scaffold(
-      appBar: AppBar(title: Text('Electrical · ${d['cycleNo'] ?? widget.cycleId}')),
+      appBar: ImpressionAppBar(
+        title: 'Electrical · ${d['cycleNo'] ?? widget.cycleId}',
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('${d['shaftNo']} / ${d['sleeveId']} · ${d['pressId']}'),
+          ImpressionTipBanner(
+            tipId: 'electrical',
+            text: ImpressionTipBanner.tips['electrical']!,
+          ),
+          Text(
+            '${d['shaftNo']} / ${d['sleeveId']} · ${d['pressId']}',
+            style: TextStyle(color: onSurface),
+          ),
           const SizedBox(height: 12),
-          const Text('Conductive resistance cold (mΩ)', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+            'Conductive resistance cold (mΩ)',
+            style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
+          ),
           const SizedBox(height: 6),
           _row3(_condL1, _condC1, _condR1, 'L', 'C', 'R'),
           const SizedBox(height: 6),
           _row3(_condL2, _condC2, _condR2, 'L', 'C', 'R'),
           const SizedBox(height: 12),
-          const Text('Insulation resistance (GΩ)', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+            'Insulation resistance (GΩ)',
+            style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
+          ),
           const SizedBox(height: 6),
           _row2(_insL1, _insR1, 'L', 'R'),
           const SizedBox(height: 6),
@@ -99,12 +118,14 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
           const SizedBox(height: 12),
           TextField(
             controller: _comments,
+            style: TextStyle(color: onSurface),
             decoration: const InputDecoration(labelText: 'Comments', border: OutlineInputBorder()),
             maxLines: 2,
           ),
           SwitchListTile(
-            title: const Text('Pass'),
+            title: Text('Pass', style: TextStyle(color: onSurface)),
             value: _pass,
+            activeThumbColor: kBrandOrange,
             onChanged: (v) => setState(() {
               _pass = v;
               if (!v) _esa = 'unsuitable';
@@ -120,10 +141,20 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
                 DropdownMenuItem(value: 'yellow_only', child: Text('Yellow units only')),
               ],
               onChanged: (v) => setState(() => _esa = v ?? 'full'),
-              decoration: const InputDecoration(labelText: 'ESA suitability', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'ESA suitability',
+                border: OutlineInputBorder(),
+              ),
             ),
           const SizedBox(height: 16),
-          FilledButton(onPressed: _saving ? null : _submit, child: const Text('Submit electrical')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: kBrandOrange,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: _saving ? null : _submit,
+            child: const Text('Submit electrical'),
+          ),
         ],
       ),
     );

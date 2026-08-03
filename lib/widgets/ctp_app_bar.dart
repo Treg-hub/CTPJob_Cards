@@ -44,12 +44,11 @@ class CtpAppBar extends ConsumerWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final onSite = _resolveOnSite(ref);
-    // Gradient is always strong colour (orange → green/red). Force light
-    // foreground so title/back/actions never go light-on-light or dark-on-dark
-    // when the ambient AppBarTheme is dark-mode white/black.
-    const fg = Colors.white;
+    // Solid product rule: title + icons always black on orange (and on the
+    // orange→green/red presence gradient). Same in light and dark theme.
+    const fg = Colors.black;
     return AppBar(
-      title: Text(title, style: const TextStyle(color: fg)),
+      title: Text(title, style: const TextStyle(color: fg, fontSize: 20, fontWeight: FontWeight.w500)),
       leading: leading,
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,

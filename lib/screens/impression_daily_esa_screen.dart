@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../models/impression_settings.dart';
 import '../services/impression_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/impression_app_bar.dart';
+import '../widgets/impression_condition_chips.dart';
+import '../widgets/impression_tip_banner.dart';
 
 class ImpressionDailyEsaScreen extends StatefulWidget {
   final String pressId;
@@ -22,16 +26,11 @@ class _EsaUnit {
   bool noEsa = false;
   bool cleanedCharge = false;
   bool cleanedDischarge = false;
-  final condCharge = TextEditingController();
-  final condDischarge = TextEditingController();
+  String conditionCharge = 'OK';
+  String conditionDischarge = 'OK';
   String? shaftNo;
   String? sleeveId;
   String? cycleId;
-
-  void dispose() {
-    condCharge.dispose();
-    condDischarge.dispose();
-  }
 }
 
 class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
@@ -47,14 +46,6 @@ class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void dispose() {
-    for (final u in _units) {
-      u.dispose();
-    }
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -85,8 +76,8 @@ class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
       units['${i + 1}'] = {
         'cleanedCharge': u.cleanedCharge,
         'cleanedDischarge': u.cleanedDischarge,
-        'conditionCharge': u.condCharge.text.trim(),
-        'conditionDischarge': u.condDischarge.text.trim(),
+        'conditionCharge': u.conditionCharge,
+        'conditionDischarge': u.conditionDischarge,
         'shaftNo': u.shaftNo,
         'sleeveId': u.sleeveId,
         'cycleId': u.cycleId,
@@ -117,11 +108,17 @@ class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
   Widget build(BuildContext context) {
     final charge = _cfg.esaChargeLabel;
     final discharge = _cfg.esaDischargeLabel;
+    final scheme = Theme.of(context).colorScheme;
+    final onSurface = scheme.onSurface;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daily ESA · ${_cfg.label}'),
+      appBar: ImpressionAppBar(
+        title: 'Daily ESA · ${_cfg.label}',
         actions: [
-          TextButton(onPressed: _saving || _loading ? null : _submit, child: const Text('Submit')),
+          TextButton(
+            onPressed: _saving || _loading ? null : _submit,
+            child: const Text('Submit', style: TextStyle(color: Colors.black)),
+          ),
         ],
       ),
       body: _loading
@@ -129,9 +126,13 @@ class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
           : ListView(
               padding: const EdgeInsets.all(12),
               children: [
+                ImpressionTipBanner(
+                  tipId: 'daily_esa',
+                  text: ImpressionTipBanner.tips['daily_esa']!,
+                ),
                 Text(
                   'Charge: $charge · Discharge: $discharge',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: TextStyle(fontSize: 13, color: onSurface),
                 ),
                 const SizedBox(height: 8),
                 ...List.generate(8, (i) {
@@ -140,9 +141,13 @@ class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
                   if (u.noEsa) {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
+                      color: scheme.surfaceContainerHighest,
                       child: ListTile(
-                        title: Text('Unit $n'),
-                        subtitle: const Text('Yellow — no ESA'),
+                        title: Text('Unit $n', style: TextStyle(color: onSurface)),
+                        subtitle: Text(
+                          'Yellow — no ESA',
+                          style: TextStyle(color: onSurface.withValues(alpha: 0.75)),
+                        ),
                       ),
                     );
                   }
@@ -155,43 +160,55 @@ class _ImpressionDailyEsaScreenState extends State<ImpressionDailyEsaScreen> {
                         children: [
                           Text(
                             'Unit $n · ${u.shaftNo ?? "—"} / ${u.sleeveId ?? "—"}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: onSurface,
+                            ),
                           ),
                           CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text('Cleaned $charge'),
+                            title: Text(
+                              'Cleaned $charge',
+                              style: TextStyle(color: onSurface),
+                            ),
                             value: u.cleanedCharge,
                             onChanged: (v) => setState(() => u.cleanedCharge = v ?? false),
                           ),
                           CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text('Cleaned $discharge'),
+                            title: Text(
+                              'Cleaned $discharge',
+                              style: TextStyle(color: onSurface),
+                            ),
                             value: u.cleanedDischarge,
                             onChanged: (v) => setState(() => u.cleanedDischarge = v ?? false),
                           ),
-                          TextField(
-                            controller: u.condCharge,
-                            decoration: InputDecoration(
-                              labelText: 'Condition $charge',
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                            ),
+                          ImpressionConditionChips(
+                            label: 'Condition of $charge',
+                            options: ImpressionConditionChips.esaChargeOptions,
+                            value: u.conditionCharge,
+                            onChanged: (v) => setState(() => u.conditionCharge = v),
                           ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: u.condDischarge,
-                            decoration: InputDecoration(
-                              labelText: 'Condition $discharge',
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                            ),
+                          const SizedBox(height: 10),
+                          ImpressionConditionChips(
+                            label: 'Condition of $discharge',
+                            options: ImpressionConditionChips.esaDischargeOptions,
+                            value: u.conditionDischarge,
+                            onChanged: (v) => setState(() => u.conditionDischarge = v),
                           ),
                         ],
                       ),
                     ),
                   );
                 }),
-                FilledButton(onPressed: _saving ? null : _submit, child: const Text('Submit daily ESA')),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.black,
+                  ),
+                  onPressed: _saving ? null : _submit,
+                  child: const Text('Submit daily ESA'),
+                ),
               ],
             ),
     );

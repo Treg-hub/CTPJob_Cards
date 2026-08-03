@@ -757,24 +757,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             ),
       });
     }
-    // Impression rollers — role gate + presence: managers/admin off-site OK; others on-site.
-    if (role_utils.canAccessImpressionRollers(
-            currentEmployee, _impressionSettings) &&
-        PresenceGating.canAccessImpressionRollersPresence(
-          emp: currentEmployee,
-          isOnSite: isOnSite,
-        )) {
-      inkPlant.add({
-        'title': 'Imp Rollers',
-        'icon': Icons.rotate_right,
-        // Plant / press tool — brand terracotta (matches factory map), not Lurgi indigo.
-        'color': kBrandOrange,
-        'onTap': () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ImpressionHubScreen()),
-            ),
-      });
-    }
     // Ink (and non-Lurgi meter users): standalone Daily Readings on Home.
     // Lurgi dept opens the same screen from the Lurgi hub.
     if (_canUseOnSiteModules &&
@@ -825,6 +807,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         'onTap': () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PressManualsScreen()),
+            ),
+      });
+    }
+    // Imp Rollers — Tools (with Press Live / Manuals), not Ink & Plant.
+    if (role_utils.canAccessImpressionRollers(
+            currentEmployee, _impressionSettings) &&
+        PresenceGating.canAccessImpressionRollersPresence(
+          emp: currentEmployee,
+          isOnSite: isOnSite,
+        )) {
+      tools.add({
+        'title': 'Imp Rollers',
+        'icon': Icons.rotate_right,
+        'color': kBrandOrange,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ImpressionHubScreen()),
             ),
       });
     }
