@@ -342,7 +342,9 @@ class _InkCaptureDeliveryNoteScreenState
               textInputAction: TextInputAction.done,
               onChanged: _onNoteNumberChanged,
               onSubmitted: (_) {
-                if (_canSave) void _submit();
+                if (_canSave) {
+                  _submit();
+                }
               },
             ),
             const SizedBox(height: 8),
