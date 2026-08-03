@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/impression_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/impression_app_bar.dart';
+import '../widgets/impression_tip_banner.dart';
 
 /// Mechanical control sheet + start build.
 class ImpressionStartBuildScreen extends StatefulWidget {
@@ -136,11 +139,16 @@ class _ImpressionStartBuildScreenState extends State<ImpressionStartBuildScreen>
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Scaffold(
-      appBar: AppBar(title: Text('Start build · ${widget.pressId}')),
+      appBar: ImpressionAppBar(title: 'Start build · ${widget.pressId}'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          ImpressionTipBanner(
+            tipId: 'start_build',
+            text: ImpressionTipBanner.tips['start_build']!,
+          ),
           TextField(
             controller: _shaft,
             decoration: const InputDecoration(labelText: 'Shaft (Roller No.) *', border: OutlineInputBorder()),
@@ -167,7 +175,7 @@ class _ImpressionStartBuildScreenState extends State<ImpressionStartBuildScreen>
           if (_preferredHint != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(_preferredHint!, style: TextStyle(color: Colors.orange.shade800)),
+              child: Text(_preferredHint!, style: TextStyle(color: kBrandOrange, fontWeight: FontWeight.w600)),
             ),
           if (_preferredHint?.contains('rematch') == true) ...[
             const SizedBox(height: 8),
@@ -177,7 +185,10 @@ class _ImpressionStartBuildScreenState extends State<ImpressionStartBuildScreen>
             ),
           ],
           const Divider(height: 24),
-          const Text('Mechanical (control sheet)', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+            'Mechanical (control sheet)',
+            style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
+          ),
           const SizedBox(height: 8),
           TextField(controller: _length, decoration: const InputDecoration(labelText: 'Length', border: OutlineInputBorder())),
           const SizedBox(height: 8),
@@ -217,8 +228,18 @@ class _ImpressionStartBuildScreenState extends State<ImpressionStartBuildScreen>
           ),
           const SizedBox(height: 16),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: kBrandOrange,
+              foregroundColor: Colors.black,
+            ),
             onPressed: _saving ? null : _submit,
-            child: _saving ? const CircularProgressIndicator() : const Text('Start build'),
+            child: _saving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                  )
+                : const Text('Start build'),
           ),
         ],
       ),

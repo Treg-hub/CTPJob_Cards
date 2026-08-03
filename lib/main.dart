@@ -454,11 +454,13 @@ class CtpJobCardsApp extends ConsumerWidget {
           outlineVariant: Color(0xFFE0E0E0),
         ),
         scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        // App bar: orange bar, black title + icons (light and dark — same rule).
         appBarTheme: const AppBarTheme(
           backgroundColor: kBrandOrange,
           foregroundColor: Colors.black,
           elevation: 0,
           iconTheme: IconThemeData(color: Colors.black),
+          actionsIconTheme: IconThemeData(color: Colors.black),
           titleTextStyle: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w500),
         ),
         cardTheme: const CardThemeData(
@@ -524,11 +526,14 @@ class CtpJobCardsApp extends ConsumerWidget {
           outlineVariant: Color(0xFF2A2A2A),
         ),
         scaffoldBackgroundColor: const Color(0xFF000000),
+        // App bar: same as light — orange bar, black title/icons (no light/dark split).
         appBarTheme: const AppBarTheme(
           backgroundColor: kBrandOrange,
           foregroundColor: Colors.black,
           elevation: 0,
           iconTheme: IconThemeData(color: Colors.black),
+          actionsIconTheme: IconThemeData(color: Colors.black),
+          titleTextStyle: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w500),
         ),
         cardTheme: const CardThemeData(
           color: Color(0xFF1A1A1A),
@@ -559,10 +564,12 @@ class CtpJobCardsApp extends ConsumerWidget {
             borderSide: const BorderSide(color: kBrandOrange, width: 2),
           ),
         ),
+        // Body TabBars (e.g. View Job Cards): primary accent for selected tab on dark surface.
         tabBarTheme: const TabBarThemeData(
           labelColor: kBrandOrange,
           unselectedLabelColor: Colors.white54,
           indicatorColor: kBrandOrange,
+          labelStyle: TextStyle(fontWeight: FontWeight.bold),
           labelPadding: EdgeInsets.symmetric(horizontal: 8),
         ),
         switchTheme: const SwitchThemeData(

@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/collections.dart';
+import '../widgets/impression_app_bar.dart';
+import '../widgets/impression_tip_banner.dart';
 
 /// Life review: cycle header, events, mech/elec, linked dailies.
 class ImpressionCycleDetailScreen extends StatelessWidget {
@@ -11,8 +13,9 @@ class ImpressionCycleDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Scaffold(
-      appBar: AppBar(title: const Text('Cycle life review')),
+      appBar: const ImpressionAppBar(title: 'Cycle life review'),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection(Collections.impressionCycles)
@@ -23,30 +26,45 @@ class ImpressionCycleDetailScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snap.data!.exists) {
-            return const Center(child: Text('Cycle not found'));
+            return Center(child: Text('Cycle not found', style: TextStyle(color: onSurface)));
           }
           final d = snap.data!.data()!;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(d['cycleNo']?.toString() ?? cycleId,
-                  style: Theme.of(context).textTheme.titleLarge),
-              Text('${d['shaftNo']} / ${d['sleeveId']} · ${d['pressId']} · ${d['state']}'),
-              if (d['esaSuitability'] != null) Text('ESA: ${d['esaSuitability']}'),
-              if (d['rematch'] == true) Text('Rematch: ${d['rematchReason'] ?? "yes"}'),
+              ImpressionTipBanner(
+                tipId: 'cycle_detail',
+                text: ImpressionTipBanner.tips['cycle_detail']!,
+              ),
+              Text(
+                d['cycleNo']?.toString() ?? cycleId,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: onSurface),
+              ),
+              Text(
+                '${d['shaftNo']} / ${d['sleeveId']} · ${d['pressId']} · ${d['state']}',
+                style: TextStyle(color: onSurface),
+              ),
+              if (d['esaSuitability'] != null)
+                Text('ESA: ${d['esaSuitability']}', style: TextStyle(color: onSurface)),
+              if (d['rematch'] == true)
+                Text(
+                  'Rematch: ${d['rematchReason'] ?? "yes"}',
+                  style: TextStyle(color: onSurface),
+                ),
               const Divider(height: 24),
-              const Text('Mechanical', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text(_pretty(d['mechanical'])),
+              Text('Mechanical', style: TextStyle(fontWeight: FontWeight.bold, color: onSurface)),
+              Text(_pretty(d['mechanical']), style: TextStyle(color: onSurface)),
               const SizedBox(height: 12),
-              const Text('Electrical', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text(_pretty(d['electrical'])),
+              Text('Electrical', style: TextStyle(fontWeight: FontWeight.bold, color: onSurface)),
+              Text(_pretty(d['electrical']), style: TextStyle(color: onSurface)),
               const SizedBox(height: 12),
-              const Text('Install / remove', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('Install: ${_pretty(d['install'])}'),
-              Text('Remove: ${_pretty(d['remove'])}'),
-              if (d['sendOut'] != null) Text('Send-out: ${_pretty(d['sendOut'])}'),
+              Text('Install / remove', style: TextStyle(fontWeight: FontWeight.bold, color: onSurface)),
+              Text('Install: ${_pretty(d['install'])}', style: TextStyle(color: onSurface)),
+              Text('Remove: ${_pretty(d['remove'])}', style: TextStyle(color: onSurface)),
+              if (d['sendOut'] != null)
+                Text('Send-out: ${_pretty(d['sendOut'])}', style: TextStyle(color: onSurface)),
               const Divider(height: 24),
-              const Text('Events', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Events', style: TextStyle(fontWeight: FontWeight.bold, color: onSurface)),
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: FirebaseFirestore.instance
                     .collection(Collections.impressionCycles)
@@ -57,24 +75,32 @@ class ImpressionCycleDetailScreen extends StatelessWidget {
                     .snapshots(),
                 builder: (context, es) {
                   final docs = es.data?.docs ?? [];
-                  if (docs.isEmpty) return const Text('No events yet');
+                  if (docs.isEmpty) {
+                    return Text('No events yet', style: TextStyle(color: onSurface));
+                  }
                   return Column(
                     children: docs.map((e) {
                       final m = e.data();
                       return ListTile(
                         dense: true,
-                        title: Text('${m['type']}'),
-                        subtitle: Text('${m['byName'] ?? m['byClock'] ?? ''}'),
+                        title: Text('${m['type']}', style: TextStyle(color: onSurface)),
+                        subtitle: Text(
+                          '${m['byName'] ?? m['byClock'] ?? ''}',
+                          style: TextStyle(color: onSurface.withValues(alpha: 0.75)),
+                        ),
                       );
                     }).toList(),
                   );
                 },
               ),
               const Divider(height: 24),
-              const Text('Daily IR (install life)', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Daily IR (install life)',
+                style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
+              ),
               _DailyHits(cycleId: cycleId, collection: Collections.impressionDailyIr),
               const SizedBox(height: 12),
-              const Text('Daily ESA', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Daily ESA', style: TextStyle(fontWeight: FontWeight.bold, color: onSurface)),
               _DailyHits(cycleId: cycleId, collection: Collections.impressionDailyEsa),
             ],
           );
@@ -108,30 +134,34 @@ class _DailyHits extends StatelessWidget {
           .limit(40)
           .snapshots(),
       builder: (context, snap) {
+        final onSurface = Theme.of(context).colorScheme.onSurface;
         final hits = <Widget>[];
         for (final d in snap.data?.docs ?? []) {
           final m = d.data();
           final units = m['units'];
           if (units is! Map) continue;
-          var match = false;
           for (final e in units.entries) {
             final line = e.value;
             if (line is Map && line['cycleId'] == cycleId) {
-              match = true;
               hits.add(ListTile(
                 dense: true,
-                title: Text('${m['dateKey']} · unit ${e.key}'),
+                title: Text(
+                  '${m['dateKey']} · unit ${e.key}',
+                  style: TextStyle(color: onSurface),
+                ),
                 subtitle: Text(
                   line['overMax'] == true
                       ? 'OVER MAX ${line['overMaxFields'] ?? ""} · ${line['condition'] ?? ""}'
                       : '${line['condition'] ?? line['conditionCharge'] ?? "ok"}',
+                  style: TextStyle(color: onSurface.withValues(alpha: 0.75)),
                 ),
               ));
             }
           }
-          if (!match) continue;
         }
-        if (hits.isEmpty) return const Text('No linked daily checks yet');
+        if (hits.isEmpty) {
+          return Text('No linked daily checks yet', style: TextStyle(color: onSurface));
+        }
         return Column(children: hits);
       },
     );

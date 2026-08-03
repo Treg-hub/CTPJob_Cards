@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 
 import '../models/impression_settings.dart';
 import '../services/impression_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/impression_app_bar.dart';
+import '../widgets/impression_condition_chips.dart';
+import '../widgets/impression_tip_banner.dart';
 
-/// Real per-unit daily impression roller inspection (replaces stub submit).
+/// Real per-unit daily impression roller inspection.
 class ImpressionDailyIrScreen extends StatefulWidget {
   final String pressId;
   final ImpressionSettings settings;
@@ -29,7 +33,7 @@ class _UnitIr {
   final bladder = TextEditingController();
   final outletC = TextEditingController();
   final inletC = TextEditingController();
-  final condition = TextEditingController();
+  String condition = 'OK';
   final actionTaken = TextEditingController();
   bool get isOccupied => state == 'occupied';
 
@@ -39,7 +43,6 @@ class _UnitIr {
     bladder.dispose();
     outletC.dispose();
     inletC.dispose();
-    condition.dispose();
     actionTaken.dispose();
   }
 }
@@ -111,6 +114,12 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
         );
         return;
       }
+      if (u.condition.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unit ${i + 1}: select a condition')),
+        );
+        return;
+      }
       if (_overMax(u)) overUnits.add(i + 1);
     }
 
@@ -122,11 +131,14 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
           content: Text(
             'Unit(s) ${overUnits.join(", ")} above max '
             '(A/B ${_cfg.aSideBarMax}, bladder ${_cfg.bladderBarMax}). '
-            'Attempt to drop pressure while running and note action. Save anyway?',
+            'Note the action taken. Save anyway?',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Edit')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save with flag')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save with flag'),
+            ),
           ],
         ),
       );
@@ -146,7 +158,7 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
         'bladderBar': double.tryParse(u.bladder.text),
         if (_isBadenia) 'outletC': double.tryParse(u.outletC.text),
         if (_isBadenia) 'inletC': double.tryParse(u.inletC.text),
-        'condition': u.condition.text.trim(),
+        'condition': u.condition.trim(),
         'actionTaken': u.actionTaken.text.trim().isEmpty
             ? null
             : u.actionTaken.text.trim(),
@@ -185,9 +197,12 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
   @override
   Widget build(BuildContext context) {
     final label = _cfg.label;
+    final scheme = Theme.of(context).colorScheme;
+    final onSurface = scheme.onSurface;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daily IR · $label'),
+      appBar: ImpressionAppBar(
+        title: 'Daily IR · $label',
         actions: [
           TextButton(
             onPressed: _saving || _loading ? null : _submit,
@@ -195,9 +210,9 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                   )
-                : const Text('Submit'),
+                : const Text('Submit', style: TextStyle(color: Colors.black)),
           ),
         ],
       ),
@@ -206,23 +221,33 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
           : ListView(
               padding: const EdgeInsets.all(12),
               children: [
+                ImpressionTipBanner(
+                  tipId: 'daily_ir',
+                  text: ImpressionTipBanner.tips['daily_ir']!,
+                ),
                 Text(
                   'Date ${ImpressionService.todayDateKey()} · Max A/B ${_cfg.aSideBarMax} bar · bladder ${_cfg.bladderBarMax} bar',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: TextStyle(fontSize: 13, color: onSurface),
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: onSurface),
+                  decoration: InputDecoration(
                     labelText: 'Shift colour (optional)',
-                    border: OutlineInputBorder(),
+                    labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (v) => _shiftColour = v.trim().isEmpty ? null : v.trim(),
                 ),
                 const SizedBox(height: 12),
-                ...List.generate(8, (i) => _unitCard(i)),
+                ...List.generate(8, (i) => _unitCard(i, onSurface, scheme)),
                 const SizedBox(height: 24),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kBrandOrange,
+                    foregroundColor: Colors.black,
+                  ),
                   onPressed: _saving ? null : _submit,
                   child: const Text('Submit daily IR'),
                 ),
@@ -231,16 +256,19 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
     );
   }
 
-  Widget _unitCard(int i) {
+  Widget _unitCard(int i, Color onSurface, ColorScheme scheme) {
     final u = _units[i];
     final n = i + 1;
     if (!u.isOccupied) {
       return Card(
         margin: const EdgeInsets.only(bottom: 8),
-        color: Colors.orange.shade50,
+        color: scheme.surfaceContainerHighest,
         child: ListTile(
-          title: Text('Unit $n'),
-          subtitle: const Text('Awaiting install — N/A for IR'),
+          title: Text('Unit $n', style: TextStyle(color: onSurface)),
+          subtitle: Text(
+            'Awaiting install — N/A for IR',
+            style: TextStyle(color: onSurface.withValues(alpha: 0.75)),
+          ),
         ),
       );
     }
@@ -256,7 +284,7 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
               'Unit $n · ${u.shaftNo ?? "—"} / ${u.sleeveId ?? "—"}',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: over ? Colors.red.shade800 : null,
+                color: over ? scheme.error : onSurface,
               ),
             ),
             const SizedBox(height: 8),
@@ -265,8 +293,10 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                 Expanded(
                   child: TextField(
                     controller: u.aSide,
+                    style: TextStyle(color: onSurface),
                     decoration: InputDecoration(
                       labelText: 'A-side bar',
+                      labelStyle: TextStyle(color: scheme.onSurfaceVariant),
                       border: const OutlineInputBorder(),
                       isDense: true,
                       errorText: (double.tryParse(u.aSide.text) ?? 0) > _cfg.aSideBarMax
@@ -281,9 +311,11 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                 Expanded(
                   child: TextField(
                     controller: u.bSide,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: onSurface),
+                    decoration: InputDecoration(
                       labelText: 'B-side bar',
-                      border: OutlineInputBorder(),
+                      labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -294,9 +326,11 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                 Expanded(
                   child: TextField(
                     controller: u.bladder,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: onSurface),
+                    decoration: InputDecoration(
                       labelText: 'Bladder bar',
-                      border: OutlineInputBorder(),
+                      labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -312,9 +346,11 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                   Expanded(
                     child: TextField(
                       controller: u.outletC,
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: onSurface),
+                      decoration: InputDecoration(
                         labelText: 'Outlet °C (A)',
-                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -324,9 +360,11 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                   Expanded(
                     child: TextField(
                       controller: u.inletC,
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: onSurface),
+                      decoration: InputDecoration(
                         labelText: 'Inlet °C (B)',
-                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -335,22 +373,22 @@ class _ImpressionDailyIrScreenState extends State<ImpressionDailyIrScreen> {
                 ],
               ),
             ],
-            const SizedBox(height: 8),
-            TextField(
-              controller: u.condition,
-              decoration: const InputDecoration(
-                labelText: 'Condition / defects',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+            const SizedBox(height: 12),
+            ImpressionConditionChips(
+              label: 'Condition of impression roller',
+              options: ImpressionConditionChips.rollerOptions,
+              value: u.condition,
+              onChanged: (v) => setState(() => u.condition = v),
             ),
             if (over) ...[
               const SizedBox(height: 8),
               TextField(
                 controller: u.actionTaken,
-                decoration: const InputDecoration(
+                style: TextStyle(color: onSurface),
+                decoration: InputDecoration(
                   labelText: 'Action taken (drop pressure / planned change)',
-                  border: OutlineInputBorder(),
+                  labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
