@@ -1447,6 +1447,8 @@ class InkService {
     required String localFilePath,
     required String contentType,
     required String capturedBy,
+    /// Number printed on the paper DN form (e.g. WL817898).
+    required String noteNumber,
   }) async {
     _guardWrite();
     if (kind != 'shipment' && kind != 'local_po') {
@@ -1455,6 +1457,12 @@ class InkService {
     final id = docId.trim();
     if (id.isEmpty) {
       throw ArgumentError('docId is required');
+    }
+    final note = noteNumber.trim();
+    if (note.length < 3) {
+      throw ArgumentError(
+        'noteNumber is required — type the number from the top of the paper form',
+      );
     }
     final file = File(localFilePath);
     if (!file.existsSync()) {
@@ -1497,6 +1505,7 @@ class InkService {
       'content_type': safeType,
       'captured_by': capturedBy,
       'source': 'mobile',
+      'note_number': note,
     });
   }
 

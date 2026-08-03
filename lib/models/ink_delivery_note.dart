@@ -9,6 +9,7 @@ class InkDeliveryNote {
     required this.capturedBy,
     this.capturedAt,
     this.source = 'mobile',
+    this.noteNumber,
   });
 
   final String storagePath;
@@ -17,12 +18,17 @@ class InkDeliveryNote {
   final DateTime? capturedAt;
   final String source;
 
+  /// Number printed on the physical transporter form (e.g. WL817898 next to
+  /// "Delivery Note"). Operator types this on capture; links paper → receipt.
+  final String? noteNumber;
+
   static InkDeliveryNote? fromMap(dynamic raw) {
     if (raw is! Map) return null;
     final m = Map<String, dynamic>.from(raw);
     final path = (m['storagePath'] as String?)?.trim() ?? '';
     if (path.isEmpty) return null;
     final capturedRaw = m['capturedAt'];
+    final note = (m['noteNumber'] as String?)?.trim();
     return InkDeliveryNote(
       storagePath: path,
       contentType:
@@ -30,6 +36,7 @@ class InkDeliveryNote {
       capturedBy: (m['capturedBy'] as String?) ?? '',
       capturedAt: capturedRaw is Timestamp ? capturedRaw.toDate() : null,
       source: m['source'] == 'pulse' ? 'pulse' : 'mobile',
+      noteNumber: (note != null && note.isNotEmpty) ? note : null,
     );
   }
 }
