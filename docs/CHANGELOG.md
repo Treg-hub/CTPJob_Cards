@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-03 — 2.3.0+198 — Waste Copper Skins weighing
+
+### What you will notice
+
+- **Waste → Copper Skins** collection: weigh both **full** bins (Bin 1 and Bin 2). The app subtracts the known empty bin weights and shows the **net skins kg**.
+- Copper Skins loads are **skins only** (not mixed with other waste types on the same load).
+- After you finish at the gate, the load still waits for the **client weighbridge ticket** as before — site net is recorded for comparison.
+
+---
+
 ## 2026-08-03 — 2.3.0+197 — Ink delivery note number
 
 ### What you will notice
