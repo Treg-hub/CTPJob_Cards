@@ -38,6 +38,9 @@ class Collections {
   // Public two-way thread on a feedback item (sub-collection of feedback).
   // Submitter + admins may post; drives the feedback-loop notifications.
   static const String feedbackComments = 'feedback_comments';
+  // Admin-only walkaround / park-for-later notes (FeedbackAdminScreen Walk notes).
+  // Separate from staff `feedback` so the closed loop + CFs never apply.
+  static const String systemReviewNotes = 'system_review_notes';
   // Manager-to-manager Dept Requests (DR-NNNN). Create via createDeptRequest CF.
   // Subcol comments = two-way thread. No notification_inbox — Home tile only.
   static const String deptRequests = 'dept_requests';

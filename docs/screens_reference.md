@@ -417,9 +417,14 @@ Map-based editor for the factory geofence boundary stored in `config/geofence`. 
 
 ### User Feedback
 
-`lib/screens/feedback_admin_screen.dart` — **Roles:** Admin only
+`lib/screens/feedback_admin_screen.dart` — **Roles:** Admin only (dual isAdmin)
 
-Internal triage board for the feedback employees submit via the **Give Feedback** FAB on the Home screen (written to the `feedback` collection). Reached from Home Quick Actions **Feedback** tile (admins only). Gated on `Employee.isAdmin` — regular staff never see it; they only get the "feedback submitted" confirmation.
+**Feedback & notes** board (Home Quick Actions **Feedback** tile). Two tabs:
+
+1. **Staff feedback** — triage of employee submissions (`feedback` collection): New → Planned → Implemented → Declined, private notes, public reply thread.
+2. **Walk notes** — admin park-for-later while walking the floor (`system_review_notes`, isAdmin claim only). FAB **Park note**: text + optional module/area/photos. Status open → reviewing → actioned | parked | dropped + review notes. **Not** the staff closed loop (no CFs).
+
+Regular staff never see this screen; they only get **Give Feedback** (Home FAB) → My Feedback.
 
 #### Capabilities
 

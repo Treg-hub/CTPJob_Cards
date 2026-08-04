@@ -53,6 +53,27 @@ class FeedbackService {
     required String feedbackId,
     required List<String> localPaths,
   }) async {
+    return _uploadToPath(
+      storagePrefix: 'feedback/$feedbackId/photos',
+      localPaths: localPaths,
+    );
+  }
+
+  /// Admin walkaround notes: `system_review_notes/{id}/photos/{uuid}.jpg`.
+  Future<List<String>> uploadSystemReviewNotePhotos({
+    required String noteId,
+    required List<String> localPaths,
+  }) async {
+    return _uploadToPath(
+      storagePrefix: 'system_review_notes/$noteId/photos',
+      localPaths: localPaths,
+    );
+  }
+
+  Future<List<String>> _uploadToPath({
+    required String storagePrefix,
+    required List<String> localPaths,
+  }) async {
     _guardWrite();
     if (localPaths.isEmpty) return const [];
     final urls = <String>[];
@@ -62,7 +83,7 @@ class FeedbackService {
         throw Exception('Photo file was cleaned up before upload — please re-add it');
       }
       final fileName = '${const Uuid().v4()}.jpg';
-      final ref = _storage.ref('feedback/$feedbackId/photos/$fileName');
+      final ref = _storage.ref('$storagePrefix/$fileName');
       final task = await ref.putFile(
         file,
         SettableMetadata(contentType: 'image/jpeg'),
