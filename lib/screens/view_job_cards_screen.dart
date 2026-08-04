@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/job_card.dart';
 import '../services/firestore_service.dart';
@@ -36,6 +38,9 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
 
   String selectedStaffFilter = 'All';
 
+  /// When false, location chips are hidden and only the path strip shows.
+  bool _filtersExpanded = true;
+
   late TabController _tabController;
 
   bool get isSuperManager =>
@@ -44,9 +49,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
   static const int _pageSize = 100;
 
   final FirestoreService _firestoreService = FirestoreService();
-
-  /// Bumps when filters change so each tab list rebuilds with new filter.
-  int _filterEpoch = 0;
 
   static const _tabStatuses = [
     JobStatus.open,
@@ -62,6 +64,58 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
     'Closed',
   ];
 
+  /// Per-status page size (Load more / pull-to-refresh).
+  final Map<JobStatus, int> _limits = {
+    for (final s in _tabStatuses) s: _pageSize,
+  };
+
+  final Map<JobStatus, List<JobCard>> _cardsByStatus = {
+    for (final s in _tabStatuses) s: const <JobCard>[],
+  };
+  final Map<JobStatus, bool> _hasSnapshot = {
+    for (final s in _tabStatuses) s: false,
+  };
+  final Map<JobStatus, bool> _fromCache = {
+    for (final s in _tabStatuses) s: true,
+  };
+  final Map<JobStatus, Object?> _errors = {
+    for (final s in _tabStatuses) s: null,
+  };
+  final Map<JobStatus, StreamSubscription<JobCardListSnapshot>?> _subs = {
+    for (final s in _tabStatuses) s: null,
+  };
+
+  bool get _hasLocationFilter =>
+      selectedDepartment != null ||
+      selectedArea != null ||
+      selectedMachine != null ||
+      selectedPart != null;
+
+  /// Breadcrumb path for the location strip (dept › area › machine › part).
+  String get _locationPath {
+    final parts = <String>[
+      if (selectedDepartment != null) selectedDepartment!,
+      if (selectedArea != null) selectedArea!,
+      if (selectedMachine != null) selectedMachine!,
+      if (selectedPart != null) selectedPart!,
+    ];
+    return parts.join(' › ');
+  }
+
+  /// All loaded jobs across status tabs (for chip relevance).
+  Iterable<JobCard> get _allLoadedCards =>
+      _tabStatuses.expand((s) => _cardsByStatus[s]!);
+
+  /// Staff-scoped jobs used to build location chips (not location-filtered).
+  List<JobCard> get _chipSourceCards {
+    if (selectedStaffFilter == 'All') {
+      return _allLoadedCards.toList();
+    }
+    return _allLoadedCards.where(_matchesStaffFilter).toList();
+  }
+
+  bool get _anySnapshot => _hasSnapshot.values.any((v) => v);
+
   @override
   void initState() {
     super.initState();
@@ -76,13 +130,31 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
     if (isSuperManager) {
       selectedDepartment = null;
     }
+    // Deep-link from Create "View similar" (or any caller) wins over defaults.
+    if (widget.filterDepartment != null) {
+      selectedDepartment = widget.filterDepartment;
+    }
     selectedArea = widget.filterArea;
     selectedMachine = widget.filterMachine;
     selectedPart = widget.filterPart;
+
+    // Start collapsed when opened already at machine/part — list space first.
+    if (selectedMachine != null || selectedPart != null) {
+      _filtersExpanded = false;
+    }
+
+    // Own all four status streams so chips reflect every tab, not only the
+    // currently mounted page (and without a second set of listeners).
+    for (final status in _tabStatuses) {
+      _subscribe(status);
+    }
   }
 
   @override
   void dispose() {
+    for (final sub in _subs.values) {
+      sub?.cancel();
+    }
     _tabController.dispose();
     super.dispose();
   }
@@ -94,206 +166,374 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
     return null;
   }
 
-  void _bumpFilters() => setState(() => _filterEpoch++);
+  bool _matchesStaffFilter(JobCard j) {
+    switch (selectedStaffFilter) {
+      case 'Mechanical':
+        return j.type == JobType.mechanical ||
+            j.type == JobType.mechanicalElectrical;
+      case 'Electrical':
+        return j.type == JobType.electrical ||
+            j.type == JobType.mechanicalElectrical;
+      default:
+        return true;
+    }
+  }
 
-  Widget _buildCascadingFilters() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _firestoreService.getFactoryStructure(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text('Error loading filters: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red)),
-          );
-        }
-        if (!snapshot.hasData) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: CircularProgressIndicator(),
-          );
-        }
+  void _subscribe(JobStatus status) {
+    _subs[status]?.cancel();
+    final limit = _limits[status]!;
+    final stream = status == JobStatus.closed
+        ? _firestoreService.getClosedJobCardsWithMeta(limit: limit)
+        : _firestoreService.getJobCardsByStatusWithMeta(status, limit: limit);
 
-        final data = snapshot.data!;
-        final areas = selectedDepartment != null
-            ? (data[selectedDepartment] as Map<String, dynamic>? ?? {})
-                .keys
-                .toList()
-            : <String>[];
-        final machines = selectedArea != null && selectedDepartment != null
-            ? (data[selectedDepartment]?[selectedArea] as List<dynamic>? ?? [])
-                .cast<String>()
-            : <String>[];
+    _subs[status] = stream.listen(
+      (snap) {
+        if (!mounted) return;
+        setState(() {
+          _cardsByStatus[status] = snap.cards;
+          _fromCache[status] = snap.isFromCache;
+          _hasSnapshot[status] = true;
+          _errors[status] = null;
+        });
+      },
+      onError: (Object e) {
+        if (!mounted) return;
+        setState(() {
+          _errors[status] = e;
+          _hasSnapshot[status] = true;
+        });
+      },
+    );
+  }
 
-        Widget currentStep;
+  void _loadMore(JobStatus status) {
+    setState(() {
+      _limits[status] = _limits[status]! + _pageSize;
+    });
+    _subscribe(status);
+  }
 
-        if (selectedPart != null) {
-          currentStep = const SizedBox.shrink();
-        } else if (selectedMachine != null) {
-          currentStep = FutureBuilder<List<String>>(
-            future: _firestoreService.getPreviousParts(
-                selectedDepartment!, selectedArea!, selectedMachine!),
-            builder: (context, snapshot) {
-              final previousParts = snapshot.data ?? [];
-              if (previousParts.isEmpty) {
-                return Text('No previous parts found',
-                    style: TextStyle(
-                        color:
-                            Theme.of(context).colorScheme.onSurfaceVariant));
-              }
-              return Center(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.center,
-                  children: previousParts
-                      .map((part) => ActionChip(
-                            label: Text(part),
-                            onPressed: () {
-                              setState(() => selectedPart = part);
-                              _bumpFilters();
-                            },
-                            backgroundColor: selectedPart == part
-                                ? kBrandOrange.withValues(alpha: 51)
-                                : null,
-                            labelStyle: TextStyle(
-                                color: selectedPart == part
-                                    ? kBrandOrange
-                                    : Theme.of(context)
-                                        .appColors
-                                        .chipUnselectedLabel),
-                          ))
-                      .toList(),
-                ),
-              );
-            },
-          );
-        } else if (selectedArea != null) {
-          currentStep = Center(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              alignment: WrapAlignment.center,
-              children: machines
-                  .map((machine) => ChoiceChip(
-                        label: Text(machine),
-                        selected: selectedMachine == machine,
-                        onSelected: (_) {
-                          setState(() {
-                            selectedMachine = machine;
-                            selectedPart = null;
-                          });
-                          _bumpFilters();
-                        },
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        labelStyle: selectedMachine == machine
-                            ? const TextStyle(color: Color(0xFFFF8C42))
-                            : TextStyle(
-                                color: Theme.of(context)
-                                    .appColors
-                                    .chipUnselectedLabel),
-                      ))
-                  .toList(),
-            ),
-          );
-        } else if (selectedDepartment != null) {
-          currentStep = Center(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              alignment: WrapAlignment.center,
-              children: areas
-                  .map((area) => ChoiceChip(
-                        label: Text(area),
-                        selected: selectedArea == area,
-                        onSelected: (_) {
-                          setState(() {
-                            selectedArea = area;
-                            selectedMachine = null;
-                            selectedPart = null;
-                          });
-                          _bumpFilters();
-                        },
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        labelStyle: selectedArea == area
-                            ? const TextStyle(color: Color(0xFFFF8C42))
-                            : TextStyle(
-                                color: Theme.of(context)
-                                    .appColors
-                                    .chipUnselectedLabel),
-                      ))
-                  .toList(),
-            ),
-          );
-        } else {
-          currentStep = Center(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              alignment: WrapAlignment.center,
-              children: data.keys
-                  .map((dept) => ChoiceChip(
-                        label: Text(dept),
-                        selected: selectedDepartment == dept,
-                        onSelected: (_) {
-                          setState(() {
-                            selectedDepartment = dept;
-                            selectedArea = null;
-                            selectedMachine = null;
-                            selectedPart = null;
-                          });
-                          _bumpFilters();
-                        },
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        labelStyle: selectedDepartment == dept
-                            ? const TextStyle(color: Color(0xFFFF8C42))
-                            : TextStyle(
-                                color: Theme.of(context)
-                                    .appColors
-                                    .chipUnselectedLabel),
-                      ))
-                  .toList(),
-            ),
-          );
-        }
+  Future<void> _pullRefresh(JobStatus status) async {
+    setState(() {
+      _limits[status] = _pageSize;
+      _hasSnapshot[status] = false;
+      _errors[status] = null;
+    });
+    _subscribe(status);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (selectedDepartment != null ||
-                  selectedArea != null ||
-                  selectedMachine != null ||
-                  selectedPart != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Center(
-                    child: TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          selectedStaffFilter = 'All';
-                          selectedDepartment = null;
-                          selectedArea = null;
-                          selectedMachine = null;
-                          selectedPart = null;
-                        });
-                        _bumpFilters();
-                      },
-                      icon: const Icon(Icons.clear),
-                      label: const Text('Clear All Filters'),
-                      style: TextButton.styleFrom(foregroundColor: kBrandOrange),
+  /// Clears dept/area/machine/part only — staff toggle stays in the app bar.
+  void _clearLocationFilters() {
+    setState(() {
+      selectedDepartment = null;
+      selectedArea = null;
+      selectedMachine = null;
+      selectedPart = null;
+      _filtersExpanded = true;
+    });
+  }
+
+  void _toggleFiltersExpanded() {
+    setState(() => _filtersExpanded = !_filtersExpanded);
+  }
+
+  List<String> _departmentsFromJobs(List<JobCard> jobs) {
+    final set = <String>{};
+    for (final j in jobs) {
+      final d = j.department.trim();
+      if (d.isNotEmpty) set.add(d);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<String> _areasFromJobs(List<JobCard> jobs, String department) {
+    final set = <String>{};
+    for (final j in jobs) {
+      if (j.department != department) continue;
+      final a = j.area.trim();
+      if (a.isNotEmpty) set.add(a);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<String> _machinesFromJobs(
+    List<JobCard> jobs,
+    String department,
+    String area,
+  ) {
+    final set = <String>{};
+    for (final j in jobs) {
+      if (j.department != department || j.area != area) continue;
+      final m = j.machine.trim();
+      if (m.isNotEmpty) set.add(m);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<String> _partsFromJobs(
+    List<JobCard> jobs,
+    String department,
+    String area,
+    String machine,
+  ) {
+    final set = <String>{};
+    for (final j in jobs) {
+      if (j.department != department ||
+          j.area != area ||
+          j.machine != machine) {
+        continue;
+      }
+      final p = j.part.trim();
+      if (p.isNotEmpty) set.add(p);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  Widget _buildLocationPathStrip() {
+    final colors = Theme.of(context).colorScheme;
+    final path = _locationPath;
+    final expandHint =
+        _filtersExpanded ? 'Collapse filter chips' : 'Expand filter chips';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggleFiltersExpanded,
+                borderRadius: BorderRadius.circular(8),
+                child: Semantics(
+                  button: true,
+                  label: 'Filters: $path. $expandHint',
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            path,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: colors.onSurface,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          _filtersExpanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          size: 22,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              currentStep,
-            ],
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            tooltip: 'Clear location filters',
+            visualDensity: VisualDensity.compact,
+            onPressed: _clearLocationFilters,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chipWrap(List<Widget> children) {
+    if (children.isEmpty) {
+      return Text(
+        _anySnapshot
+            ? 'No matching locations in loaded job cards'
+            : 'Loading filters…',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    return Center(
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        alignment: WrapAlignment.center,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildCascadingFilters() {
+    final source = _chipSourceCards;
+    final departments = _departmentsFromJobs(source);
+    final areas = selectedDepartment != null
+        ? _areasFromJobs(source, selectedDepartment!)
+        : <String>[];
+    final machines =
+        selectedDepartment != null && selectedArea != null
+            ? _machinesFromJobs(source, selectedDepartment!, selectedArea!)
+            : <String>[];
+    final parts = selectedDepartment != null &&
+            selectedArea != null &&
+            selectedMachine != null
+        ? _partsFromJobs(
+            source,
+            selectedDepartment!,
+            selectedArea!,
+            selectedMachine!,
+          )
+        : <String>[];
+
+    final Widget currentStep;
+    if (selectedMachine != null) {
+      if (parts.isEmpty && _anySnapshot) {
+        currentStep = Text(
+          'No parts on loaded jobs for this machine',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         );
-      },
+      } else {
+        currentStep = _chipWrap(
+          parts
+              .map(
+                (part) => ActionChip(
+                  label: Text(part),
+                  onPressed: () {
+                    setState(() {
+                      selectedPart = part;
+                      _filtersExpanded = false;
+                    });
+                  },
+                  backgroundColor: selectedPart == part
+                      ? kBrandOrange.withValues(alpha: 51)
+                      : null,
+                  labelStyle: TextStyle(
+                    color: selectedPart == part
+                        ? kBrandOrange
+                        : Theme.of(context).appColors.chipUnselectedLabel,
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      }
+    } else if (selectedArea != null) {
+      currentStep = _chipWrap(
+        machines
+            .map(
+              (machine) => ChoiceChip(
+                label: Text(machine),
+                selected: selectedMachine == machine,
+                onSelected: (_) {
+                  setState(() {
+                    selectedMachine = machine;
+                    selectedPart = null;
+                    _filtersExpanded = false;
+                  });
+                },
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedMachine == machine
+                    ? const TextStyle(color: Color(0xFFFF8C42))
+                    : TextStyle(
+                        color: Theme.of(context).appColors.chipUnselectedLabel,
+                      ),
+              ),
+            )
+            .toList(),
+      );
+    } else if (selectedDepartment != null) {
+      currentStep = _chipWrap(
+        areas
+            .map(
+              (area) => ChoiceChip(
+                label: Text(area),
+                selected: selectedArea == area,
+                onSelected: (_) {
+                  setState(() {
+                    selectedArea = area;
+                    selectedMachine = null;
+                    selectedPart = null;
+                  });
+                },
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedArea == area
+                    ? const TextStyle(color: Color(0xFFFF8C42))
+                    : TextStyle(
+                        color: Theme.of(context).appColors.chipUnselectedLabel,
+                      ),
+              ),
+            )
+            .toList(),
+      );
+    } else {
+      currentStep = _chipWrap(
+        departments
+            .map(
+              (dept) => ChoiceChip(
+                label: Text(dept),
+                selected: selectedDepartment == dept,
+                onSelected: (_) {
+                  setState(() {
+                    selectedDepartment = dept;
+                    selectedArea = null;
+                    selectedMachine = null;
+                    selectedPart = null;
+                  });
+                },
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                labelStyle: selectedDepartment == dept
+                    ? const TextStyle(color: Color(0xFFFF8C42))
+                    : TextStyle(
+                        color: Theme.of(context).appColors.chipUnselectedLabel,
+                      ),
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_hasLocationFilter) _buildLocationPathStrip(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: _filtersExpanded
+                ? Padding(
+                    padding: EdgeInsets.only(
+                      top: _hasLocationFilter ? 2 : 4,
+                      bottom: 4,
+                    ),
+                    child: currentStep,
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
+      ),
     );
   }
 
@@ -315,7 +555,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
                 selectedStaffFilter =
                     ['Mechanical', 'Electrical', 'All'][index];
               });
-              _bumpFilters();
             },
             borderRadius: BorderRadius.circular(8),
             borderColor: Colors.black87,
@@ -334,7 +573,6 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
       ),
       body: Column(
         children: [
-          // Match My Work: full-width centred tabs + swipeable TabBarView.
           TabBar(
             controller: _tabController,
             isScrollable: false,
@@ -347,17 +585,22 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                for (var i = 0; i < _tabStatuses.length; i++)
+                for (final status in _tabStatuses)
                   _ViewJobsStatusList(
-                    key: ValueKey(
-                        '${_tabStatuses[i].name}_$_filterEpoch'),
-                    status: _tabStatuses[i],
+                    status: status,
                     pageSize: _pageSize,
+                    limit: _limits[status]!,
+                    cards: _cardsByStatus[status]!,
+                    hasSnapshot: _hasSnapshot[status]!,
+                    isFromCache: _fromCache[status]!,
+                    error: _errors[status],
                     staffFilter: selectedStaffFilter,
                     department: selectedDepartment,
                     area: selectedArea,
                     machine: selectedMachine,
                     part: selectedPart,
+                    onLoadMore: () => _loadMore(status),
+                    onRefresh: () => _pullRefresh(status),
                   ),
               ],
             ),
@@ -368,27 +611,39 @@ class _ViewJobCardsScreenState extends State<ViewJobCardsScreen>
   }
 }
 
-/// One status tab — own bounded stream so inactive tabs can stay mounted after
-/// first visit without forcing four listeners at open (stream starts on mount).
+/// One status tab — presents parent-owned data (no extra Firestore listener).
 class _ViewJobsStatusList extends StatefulWidget {
   const _ViewJobsStatusList({
-    super.key,
     required this.status,
     required this.pageSize,
+    required this.limit,
+    required this.cards,
+    required this.hasSnapshot,
+    required this.isFromCache,
+    required this.error,
     required this.staffFilter,
     this.department,
     this.area,
     this.machine,
     this.part,
+    required this.onLoadMore,
+    required this.onRefresh,
   });
 
   final JobStatus status;
   final int pageSize;
+  final int limit;
+  final List<JobCard> cards;
+  final bool hasSnapshot;
+  final bool isFromCache;
+  final Object? error;
   final String staffFilter;
   final String? department;
   final String? area;
   final String? machine;
   final String? part;
+  final VoidCallback onLoadMore;
+  final Future<void> Function() onRefresh;
 
   @override
   State<_ViewJobsStatusList> createState() => _ViewJobsStatusListState();
@@ -396,47 +651,8 @@ class _ViewJobsStatusList extends StatefulWidget {
 
 class _ViewJobsStatusListState extends State<_ViewJobsStatusList>
     with AutomaticKeepAliveClientMixin {
-  final FirestoreService _firestoreService = FirestoreService();
-  late int _limit;
-  Stream<JobCardListSnapshot>? _stream;
-
   @override
   bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _limit = widget.pageSize;
-    _attachStream();
-  }
-
-  void _attachStream() {
-    if (widget.status == JobStatus.closed) {
-      _stream = _firestoreService.getClosedJobCardsWithMeta(limit: _limit);
-    } else {
-      _stream = _firestoreService.getJobCardsByStatusWithMeta(
-        widget.status,
-        limit: _limit,
-      );
-    }
-  }
-
-  Future<void> _pullRefresh() async {
-    setState(() {
-      _limit = widget.pageSize;
-      _stream = null;
-      _attachStream();
-    });
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-  }
-
-  void _loadMore() {
-    setState(() {
-      _limit += widget.pageSize;
-      _stream = null;
-      _attachStream();
-    });
-  }
 
   bool _matchesStaffFilter(JobCard j) {
     switch (widget.staffFilter) {
@@ -477,74 +693,70 @@ class _ViewJobsStatusListState extends State<_ViewJobsStatusList>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final stream = _stream;
-    if (stream == null) {
-      return const Center(child: CircularProgressIndicator());
+
+    if (widget.error != null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.3,
+            child: Center(
+              child: Text(
+                'Error: ${widget.error}',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          ),
+        ],
+      );
     }
 
-    return RefreshIndicator(
-      onRefresh: _pullRefresh,
-      child: StreamBuilder<JobCardListSnapshot>(
-        stream: stream,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.3,
-                  child: Center(
-                    child: Text('Error: ${snap.error}',
-                        style: const TextStyle(color: Colors.red)),
+    switch (decideListLoadState(
+      hasSnapshot: widget.hasSnapshot,
+      isEmpty: widget.cards.isEmpty,
+      isFromCache: widget.isFromCache,
+    )) {
+      case ListLoadState.loading:
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(
+              height: 200,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ],
+        );
+      case ListLoadState.waitingForServer:
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: 200,
+              child: Center(
+                child: Text(
+                  'Waiting for connection…',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-              ],
-            );
-          }
-          final meta = snap.data;
-          switch (decideListLoadState(
-            hasSnapshot: meta != null,
-            isEmpty: meta?.cards.isEmpty ?? true,
-            isFromCache: meta?.isFromCache ?? true,
-          )) {
-            case ListLoadState.loading:
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(
-                      height: 200,
-                      child: Center(child: CircularProgressIndicator())),
-                ],
-              );
-            case ListLoadState.waitingForServer:
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(
-                    height: 200,
-                    child: Center(
-                      child: Text(
-                        'Waiting for connection…',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            case ListLoadState.empty:
-            case ListLoadState.data:
-              break;
-          }
+              ),
+            ),
+          ],
+        );
+      case ListLoadState.empty:
+      case ListLoadState.data:
+        break;
+    }
 
-          final jobs = _applyFilters(meta!.cards);
-          final hitCap = jobs.length >= _limit;
-          final countLabel = hitCap ? '$_limit+' : '${jobs.length}';
+    final jobs = _applyFilters(widget.cards);
+    final hitCap = widget.cards.length >= widget.limit;
+    final countLabel = hitCap ? '${widget.limit}+' : '${jobs.length}';
 
-          if (jobs.isEmpty) {
-            return ListView(
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: jobs.isEmpty
+          ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 SizedBox(
@@ -558,54 +770,62 @@ class _ViewJobsStatusListState extends State<_ViewJobsStatusList>
                     ),
                   ),
                 ),
+                // Unfiltered page may still be capped — more matching jobs can appear.
+                if (hitCap)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Center(
+                      child: TextButton.icon(
+                        onPressed: widget.onLoadMore,
+                        icon: const Icon(Icons.expand_more),
+                        label: Text('Load more (${widget.pageSize} more)'),
+                      ),
+                    ),
+                  ),
               ],
-            );
-          }
-
-          return ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: ScreenInsets.listPadding(context, horizontal: 8, top: 8),
-            itemCount: jobs.length + 1 + (hitCap ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '$countLabel job${jobs.length == 1 ? '' : 's'} (pull to refresh)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: ScreenInsets.listPadding(context, horizontal: 8, top: 8),
+              itemCount: jobs.length + 1 + (hitCap ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '$countLabel job${jobs.length == 1 ? '' : 's'} (pull to refresh)',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  );
+                }
+                if (hitCap && index == jobs.length + 1) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: TextButton.icon(
+                        onPressed: widget.onLoadMore,
+                        icon: const Icon(Icons.expand_more),
+                        label: Text('Load more (${widget.pageSize} more)'),
+                      ),
+                    ),
+                  );
+                }
+                final job = jobs[index - 1];
+                return JobCardTile(
+                  job: job,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobCardDetailScreen(jobCard: job),
                     ),
                   ),
                 );
-              }
-              if (hitCap && index == jobs.length + 1) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: TextButton.icon(
-                      onPressed: _loadMore,
-                      icon: const Icon(Icons.expand_more),
-                      label: Text('Load more (${widget.pageSize} more)'),
-                    ),
-                  ),
-                );
-              }
-              final job = jobs[index - 1];
-              return JobCardTile(
-                job: job,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => JobCardDetailScreen(jobCard: job),
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
+              },
+            ),
     );
   }
 }
