@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-04 — 2.3.0+200 — View Jobs filters
+
+### What you will notice
+
+- **View Jobs** location filters take less space: after you pick a machine, the chip rows collapse to a short path (Department › Area › Machine). Tap the path to open chips again; tap **X** to clear the location path.
+- Filter chips only list departments, areas, machines, and parts that appear on job cards already loaded on that screen (not empty plant areas with no open work).
+- Staff type toggle (mechanical / electrical / all) still works as before and also narrows which locations show in the chips.
+
+---
+
 ## 2026-08-04 — 2.3.0+199 — Ink expected orders
 
 ### What you will notice
