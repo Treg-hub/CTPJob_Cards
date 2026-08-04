@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-04 — 2.3.0+201 — Admin walk notes
+
+### What you will notice
+
+- **Admins** on Home **Feedback** open **Feedback & notes** with two tabs: **Staff feedback** and **Walk notes**.
+- **Walk notes**: park a **heading** and details while walking the floor (optional module, area, photos).
+- Open the same note later and tap **Add more detail** to add more information — earlier text stays on the note with a date stamp.
+- You can also **Edit** the heading and body, set status (Open / Reviewing / Actioned / Parked / Dropped), and keep private **review notes** for later.
+
+---
+
 ## 2026-08-04 — 2.3.0+200 — View Jobs filters
 
 ### What you will notice
