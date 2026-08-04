@@ -11,6 +11,7 @@ import '../providers/ink_provider.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart' as role_utils;
 import '../widgets/ink_daily_readings_banner.dart';
+import '../widgets/ink_expected_orders_banner.dart';
 import '../widgets/ink_tank_fill_bar.dart';
 import 'ink_daily_readings_screen.dart';
 import 'ink_ibc_register_screen.dart';
@@ -102,6 +103,7 @@ class InkHomeScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               InkDailyReadingsBanner(status: readingsStatus),
             ],
+            const InkExpectedOrdersBanner(),
             const SizedBox(height: 8),
             const InkGuideBanner.home(),
             const SizedBox(height: 16),

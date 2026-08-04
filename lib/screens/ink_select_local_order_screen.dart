@@ -6,6 +6,7 @@ import '../models/ink_purchase_order.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_delivery_note_flow.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ink_eta_chip.dart';
 import '../widgets/ink_guide_banner.dart';
 import 'ink_receive_raw_material_screen.dart';
 
@@ -349,22 +350,36 @@ class _LocalOrderTile extends StatelessWidget {
             ),
           ),
           title: Text('${order.pulseRef} · ${order.supplierName}'),
-          subtitle: Text(
-            [
-              if (order.erpOrderNumber != null &&
-                  order.erpOrderNumber!.isNotEmpty)
-                'Pastel order ${order.erpOrderNumber}',
-              statusLabel,
-              if ((received || pendingDn) &&
-                  receivedAt != null &&
-                  dateFormat != null)
-                dateFormat!.format(receivedAt),
-              if (!received && !pendingDn && open.isNotEmpty)
-                '${open.length} open line(s) · ${preview.join(' · ')}$more',
-              if ((received || pendingDn) && lineSummary != null) lineSummary,
-              if (pendingDn && open.isNotEmpty)
-                '${open.length} open line(s) still on order',
-            ].join('\n'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  if (order.erpOrderNumber != null &&
+                      order.erpOrderNumber!.isNotEmpty)
+                    'Pastel order ${order.erpOrderNumber}',
+                  statusLabel,
+                  if ((received || pendingDn) &&
+                      receivedAt != null &&
+                      dateFormat != null)
+                    dateFormat!.format(receivedAt),
+                  if (!received && !pendingDn && open.isNotEmpty)
+                    '${open.length} open line(s) · ${preview.join(' · ')}$more',
+                  if ((received || pendingDn) && lineSummary != null)
+                    lineSummary,
+                  if (pendingDn && open.isNotEmpty)
+                    '${open.length} open line(s) still on order',
+                ].where((s) => s.isNotEmpty).join('\n'),
+                style: TextStyle(
+                  color: muted,
+                  fontSize: 13,
+                ),
+              ),
+              if (!received) ...[
+                const SizedBox(height: 4),
+                InkEtaChip(eta: order.estimatedArrival),
+              ],
+            ],
           ),
           isThreeLine: true,
           trailing: received

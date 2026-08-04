@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/ink_purchase_order.dart';
+import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
 import '../models/ink_txn_type.dart';
@@ -22,14 +23,25 @@ import '../widgets/ink_guide_banner.dart';
 /// qty received per open line, one submit writes purchase txns + CF PO
 /// remaining (mirrors IBC shipment pick → receive).
 ///
+/// **Against a pallet import shipment** ([initialShipment]): multi-line qty
+/// per invoice line; stamps `shipment_id` on purchases + shipment
+/// `received_units` (aggregate).
+///
 /// **Ad-hoc** (no order): free-form single item + supplier (escape hatch).
 ///
 /// Cost is always `pending` — manager enters total cost later on Pulse.
 class InkReceiveRawMaterialScreen extends ConsumerStatefulWidget {
-  const InkReceiveRawMaterialScreen({super.key, this.initialPurchaseOrder});
+  const InkReceiveRawMaterialScreen({
+    super.key,
+    this.initialPurchaseOrder,
+    this.initialShipment,
+  });
 
   /// Order chosen on [InkSelectLocalOrderScreen].
   final InkPurchaseOrder? initialPurchaseOrder;
+
+  /// Pallet import shipment chosen on [InkSelectIbcShipmentScreen].
+  final InkShipment? initialShipment;
 
   @override
   ConsumerState<InkReceiveRawMaterialScreen> createState() =>
@@ -47,17 +59,29 @@ class _InkReceiveRawMaterialScreenState
   DateTime _effectiveAt = DateTime.now();
   bool _submitting = false;
   late final InkPurchaseOrder? _purchaseOrder;
+  late final InkShipment? _shipment;
 
   bool get _againstPo => _purchaseOrder != null;
+  bool get _againstShipment => _shipment != null && !_againstPo;
 
   @override
   void initState() {
     super.initState();
     _purchaseOrder = widget.initialPurchaseOrder;
+    _shipment = widget.initialShipment;
     if (_purchaseOrder != null) {
       _supplier = _purchaseOrder!.supplierName;
       for (final open in _purchaseOrder!.openLines) {
         _lineQtyCtrls[open.line.itemCode] = TextEditingController();
+      }
+    } else if (_shipment != null) {
+      _supplier = 'Siegwerk';
+      for (final line in _shipment!.lines) {
+        if (line.itemCode.isEmpty) continue;
+        _lineQtyCtrls.putIfAbsent(
+          line.itemCode,
+          () => TextEditingController(),
+        );
       }
     }
   }
@@ -81,23 +105,49 @@ class _InkReceiveRawMaterialScreenState
       _parseLineQtys() {
     final out =
         <({String itemCode, double qty, String unit, String displayName})>[];
-    final po = _purchaseOrder!;
-    for (final open in po.openLines) {
-      final raw = _lineQtyCtrls[open.line.itemCode]?.text.trim() ?? '';
-      if (raw.isEmpty) continue;
-      final qty = double.tryParse(raw);
-      if (qty == null || qty <= 0) continue;
-      out.add((
-        itemCode: open.line.itemCode,
-        qty: qty,
-        unit: open.line.unit,
-        displayName: open.line.displayName,
-      ));
+    if (_againstPo) {
+      final po = _purchaseOrder!;
+      for (final open in po.openLines) {
+        final raw = _lineQtyCtrls[open.line.itemCode]?.text.trim() ?? '';
+        if (raw.isEmpty) continue;
+        final qty = double.tryParse(raw);
+        if (qty == null || qty <= 0) continue;
+        out.add((
+          itemCode: open.line.itemCode,
+          qty: qty,
+          unit: open.line.unit,
+          displayName: open.line.displayName,
+        ));
+      }
+      return out;
+    }
+    if (_againstShipment) {
+      final s = _shipment!;
+      for (final line in s.lines) {
+        if (line.itemCode.isEmpty) continue;
+        final raw = _lineQtyCtrls[line.itemCode]?.text.trim() ?? '';
+        if (raw.isEmpty) continue;
+        final qty = double.tryParse(raw);
+        if (qty == null || qty <= 0) continue;
+        final name = (line.description ?? '').trim().isNotEmpty
+            ? line.description!.trim()
+            : line.itemCode;
+        out.add((
+          itemCode: line.itemCode,
+          qty: qty,
+          unit: 'KG',
+          displayName: name,
+        ));
+      }
     }
     return out;
   }
 
-  Future<void> _submitAgainstPo() async {
+  Future<void> _submitMultiLine({
+    required String? supplierName,
+    String? purchaseOrderId,
+    String? shipmentId,
+  }) async {
     if (!guardPersonaSubmit(context)) return;
     final lines = _parseLineQtys();
     if (lines.isEmpty) {
@@ -113,7 +163,6 @@ class _InkReceiveRawMaterialScreenState
     setState(() => _submitting = true);
     final emp = writeAttributionEmployee ??
         ref.read(currentEmployeeProvider).valueOrNull;
-    final po = _purchaseOrder!;
     final notes =
         _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
     final service = ref.read(inkServiceProvider);
@@ -127,17 +176,19 @@ class _InkReceiveRawMaterialScreenState
         quantityDelta: line.qty,
         effectiveAt: _effectiveAt,
         costStatus: InkCostStatus.pending,
-        supplierName: po.supplierName,
+        supplierName: supplierName,
         actorClockNo: emp?.clockNo ?? '',
         actorName: emp?.name ?? '',
         idempotencyKey: const Uuid().v4(),
         notes: notes,
-        purchaseOrderId: po.id,
+        purchaseOrderId: purchaseOrderId,
+        shipmentId: shipmentId,
       );
       try {
         await service.recordRawMaterialReceipt(
           txn: txn,
-          purchaseOrderId: po.id,
+          purchaseOrderId: purchaseOrderId,
+          shipmentId: shipmentId,
         );
         recorded++;
       } catch (e) {
@@ -153,7 +204,7 @@ class _InkReceiveRawMaterialScreenState
           recorded == 0
               ? 'Failed to record: $lastError'
               : 'Recorded $recorded of ${lines.length} lines, then failed: $lastError. '
-                  'Re-open the order to finish remaining lines.',
+                  'Re-open to finish remaining lines.',
         ),
       ));
       if (recorded > 0) {
@@ -173,6 +224,16 @@ class _InkReceiveRawMaterialScreenState
     invalidateInkReceivedPeriodLists(ref);
     Navigator.pop(context);
   }
+
+  Future<void> _submitAgainstPo() => _submitMultiLine(
+        supplierName: _purchaseOrder!.supplierName,
+        purchaseOrderId: _purchaseOrder!.id,
+      );
+
+  Future<void> _submitAgainstShipment() => _submitMultiLine(
+        supplierName: _supplier ?? 'Siegwerk',
+        shipmentId: _shipment!.id,
+      );
 
   Future<void> _submitAdHoc() async {
     if (!guardPersonaSubmit(context)) return;
@@ -217,11 +278,114 @@ class _InkReceiveRawMaterialScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_againstPo ? 'Confirm receipt' : 'Exception: receive without order'),
+        title: Text(
+          _againstPo
+              ? 'Confirm receipt'
+              : _againstShipment
+                  ? 'Receive pallet shipment'
+                  : 'Exception: receive without order',
+        ),
       ),
       body: _againstPo
           ? _buildAgainstPo(context, df, qtyFmt)
-          : _buildAdHoc(context, df),
+          : _againstShipment
+              ? _buildAgainstShipment(context, df, qtyFmt)
+              : _buildAdHoc(context, df),
+    );
+  }
+
+  Widget _buildAgainstShipment(
+    BuildContext context,
+    DateFormat df,
+    NumberFormat qtyFmt,
+  ) {
+    final s = _shipment!;
+    final scheme = Theme.of(context).colorScheme;
+    final lines = s.lines.where((l) => l.itemCode.isNotEmpty).toList();
+
+    return ListView(
+      padding: ScreenInsets.symmetricScroll(context),
+      children: [
+        const InkGuideBanner.receiveLocalConfirm(),
+        const SizedBox(height: 12),
+        Card(
+          color: scheme.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.id,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  'Order ${s.orderNumber}'
+                  '${s.cgnaNumber != null ? ' · CGNA ${s.cgnaNumber}' : ''}',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+                if (s.expectedArrival != null)
+                  Text(
+                    'ETA ${DateFormat('d MMM yyyy').format(s.expectedArrival!.toLocal())} (est.)',
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('Qty received (kg)', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        for (final line in lines) ...[
+          Text(
+            (line.description ?? '').trim().isNotEmpty
+                ? '${line.description} (${line.itemCode})'
+                : line.itemCode,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          Text(
+            'Expected ${qtyFmt.format(line.expectedKg)} kg',
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _lineQtyCtrls[line.itemCode],
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              suffixText: 'kg',
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Effective at'),
+          subtitle: Text(df.format(_effectiveAt)),
+          trailing: const Icon(Icons.event),
+          onTap: _pickDate,
+        ),
+        TextField(
+          controller: _notesCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Notes (optional)',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: _submitting ? null : _submitAgainstShipment,
+          child: _submitting
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save receipt'),
+        ),
+      ],
     );
   }
 

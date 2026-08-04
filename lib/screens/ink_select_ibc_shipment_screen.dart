@@ -6,11 +6,13 @@ import '../models/ink_shipment.dart';
 import '../providers/ink_provider.dart';
 import '../utils/ink_delivery_note_flow.dart';
 import 'ink_receive_ibc_screen.dart';
+import 'ink_receive_raw_material_screen.dart';
 import '../utils/screen_insets.dart';
+import '../widgets/ink_eta_chip.dart';
 import '../widgets/ink_guide_banner.dart';
 
-/// Lists outstanding IBC shipments (awaiting receipt in Pulse) so the operator
-/// picks one before capturing IBCs against its packing list.
+/// Lists outstanding import shipments (IBC + pallet) so the operator picks one
+/// before receiving. IBC → serial scan; pallet → bulk qty per line.
 ///
 /// After receive: **Pending delivery note** (red) until POD photo; then greyed
 /// **Received this period** (complete).
@@ -21,10 +23,13 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
   static final _date = DateFormat('dd MMM yyyy');
 
   void _openReceive(BuildContext context, {InkShipment? shipment}) {
+    final isPallet = shipment != null && !shipment.isIbc;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => InkReceiveIbcScreen(initialShipment: shipment),
+        builder: (_) => isPallet
+            ? InkReceiveRawMaterialScreen(initialShipment: shipment)
+            : InkReceiveIbcScreen(initialShipment: shipment),
       ),
     );
   }
@@ -37,9 +42,10 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final shipmentsAsync = ref.watch(inkOpenShipmentsProvider);
     final receivedAsync = ref.watch(inkReceivedIbcShipmentsThisPeriodProvider);
     final scheme = Theme.of(context).colorScheme;
+
+    final shipmentsAsync = ref.watch(inkOpenImportShipmentsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Receive Ink (IBC)')),
@@ -117,7 +123,7 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                     children: [
                       if (shipments.isNotEmpty) ...[
                         Text(
-                          'Select the shipment you are unloading',
+                          'Select the shipment you are unloading (IBC or pallet)',
                           style: Theme.of(context)
                               .textTheme
                               .titleSmall
@@ -273,10 +279,15 @@ class _ShipmentTile extends StatelessWidget {
     final muted = scheme.onSurfaceVariant;
     final unitCount = shipment.expectedUnits.length;
     final receivedCount = shipment.receivedIbcCount;
-    final totalKg = shipment.expectedUnits.fold<double>(
-      0,
-      (sum, u) => sum + u.netKg,
-    );
+    final totalKg = shipment.isIbc
+        ? shipment.expectedUnits.fold<double>(
+            0,
+            (sum, u) => sum + u.netKg,
+          )
+        : shipment.lines.fold<double>(
+            0,
+            (sum, l) => sum + l.expectedKg,
+          );
     final colours = shipment.itemCodes.length;
     final progress = unitCount > 0 && receivedCount > 0
         ? ' · $receivedCount / $unitCount received'
@@ -323,23 +334,41 @@ class _ShipmentTile extends StatelessWidget {
                         ),
                       ),
           ),
-          title: Text(shipment.id),
-          subtitle: Text(
-            [
-              if (shipment.containerNumber != null)
-                'Container ${shipment.containerNumber}',
-              'Order ${shipment.orderNumber}',
-              if (shipment.cgnaNumber != null) 'CGNA ${shipment.cgnaNumber}',
-              if (received) 'Complete',
-              if (pendingDn) 'Received — delivery note needed',
-              if ((received || pendingDn) &&
-                  receivedAt != null &&
-                  dateFormat != null)
-                dateFormat!.format(receivedAt),
-              '$unitCount IBC${unitCount == 1 ? '' : 's'}$progress'
-                  '${colours > 0 ? ' · $colours colour${colours == 1 ? '' : 's'}' : ''}'
-                  '${totalKg > 0 ? ' · ${qty.format(totalKg)} kg' : ''}',
-            ].join('\n'),
+          title: Text(
+            shipment.isIbc
+                ? shipment.id
+                : '${shipment.id} · pallet',
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  if (shipment.containerNumber != null)
+                    'Container ${shipment.containerNumber}',
+                  'Order ${shipment.orderNumber}',
+                  if (shipment.cgnaNumber != null) 'CGNA ${shipment.cgnaNumber}',
+                  if (received) 'Complete',
+                  if (pendingDn) 'Received — delivery note needed',
+                  if ((received || pendingDn) &&
+                      receivedAt != null &&
+                      dateFormat != null)
+                    dateFormat!.format(receivedAt),
+                  if (shipment.isIbc)
+                    '$unitCount IBC${unitCount == 1 ? '' : 's'}$progress'
+                        '${colours > 0 ? ' · $colours colour${colours == 1 ? '' : 's'}' : ''}'
+                        '${totalKg > 0 ? ' · ${qty.format(totalKg)} kg' : ''}'
+                  else
+                    'Pallet receive · $colours item${colours == 1 ? '' : 's'}'
+                        '${totalKg > 0 ? ' · ${qty.format(totalKg)} kg exp.' : ''}',
+                ].join('\n'),
+                style: TextStyle(color: muted, fontSize: 13),
+              ),
+              if (!received) ...[
+                const SizedBox(height: 4),
+                InkEtaChip(eta: shipment.expectedArrival),
+              ],
+            ],
           ),
           isThreeLine: true,
           trailing: received

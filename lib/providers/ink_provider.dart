@@ -15,6 +15,7 @@ import '../models/ink_supplier.dart';
 import '../models/ink_tank_level.dart';
 import '../models/ink_transaction.dart';
 import '../services/ink_service.dart';
+import '../utils/ink_expected_deliveries.dart';
 import '../utils/ink_ibc_period.dart';
 import '../utils/ink_period.dart';
 
@@ -147,12 +148,59 @@ final inkIbcsConsumedCountByColourProvider =
 });
 
 final inkOpenShipmentsProvider = StreamProvider<List<InkShipment>>(
-  (ref) => ref.watch(inkServiceProvider).watchOpenIbcShipments(),
+  (ref) => ref.watch(inkServiceProvider).watchOpenIbcShipments().map((list) {
+    final sorted = List<InkShipment>.from(list);
+    sorted.sort((a, b) {
+      final byEta = etaListSortKey(a.expectedArrival)
+          .compareTo(etaListSortKey(b.expectedArrival));
+      if (byEta != 0) return byEta;
+      return a.id.compareTo(b.id);
+    });
+    return sorted;
+  }),
 );
 
 final inkOpenPalletShipmentsProvider = StreamProvider<List<InkShipment>>(
-  (ref) => ref.watch(inkServiceProvider).watchOpenPalletShipments(),
+  (ref) => ref.watch(inkServiceProvider).watchOpenPalletShipments().map((list) {
+    final sorted = List<InkShipment>.from(list);
+    sorted.sort((a, b) {
+      final byEta = etaListSortKey(a.expectedArrival)
+          .compareTo(etaListSortKey(b.expectedArrival));
+      if (byEta != 0) return byEta;
+      return a.id.compareTo(b.id);
+    });
+    return sorted;
+  }),
 );
+
+/// Open IBC + pallet import shipments (Receive Ink list + Expected Orders).
+final inkOpenImportShipmentsProvider =
+    Provider<AsyncValue<List<InkShipment>>>((ref) {
+  final ibc = ref.watch(inkOpenShipmentsProvider);
+  final pallet = ref.watch(inkOpenPalletShipmentsProvider);
+  if (ibc.hasError && pallet.hasError) {
+    return AsyncValue.error(
+      ibc.error ?? pallet.error ?? 'load failed',
+      ibc.stackTrace ?? pallet.stackTrace ?? StackTrace.current,
+    );
+  }
+  if (!ibc.hasValue && !pallet.hasValue) {
+    if (ibc.isLoading || pallet.isLoading) {
+      return const AsyncValue.loading();
+    }
+  }
+  final combined = <InkShipment>[
+    ...?ibc.valueOrNull,
+    ...?pallet.valueOrNull,
+  ];
+  combined.sort((a, b) {
+    final byEta = etaListSortKey(a.expectedArrival)
+        .compareTo(etaListSortKey(b.expectedArrival));
+    if (byEta != 0) return byEta;
+    return a.id.compareTo(b.id);
+  });
+  return AsyncValue.data(combined);
+});
 
 final inkOpenPurchaseOrdersProvider = StreamProvider<List<InkPurchaseOrder>>(
   (ref) => ref.watch(inkServiceProvider).watchOpenPurchaseOrders(),
@@ -168,13 +216,35 @@ final inkSignedRfoQueueProvider =
 final inkImportSignedRfoQueueProvider = inkSignedRfoQueueProvider;
 
 /// Open local-track POs still awaiting receipt (Receive Local list).
+/// Sorted by est. arrival (overdue / soonest first; missing ETA last).
 final inkOpenLocalPurchaseOrdersProvider =
     Provider<AsyncValue<List<InkPurchaseOrder>>>((ref) {
-  return ref.watch(inkOpenPurchaseOrdersProvider).whenData(
-        (list) => list
-            .where((po) => po.isLocalTrack && po.hasOpenRemaining)
-            .toList(),
-      );
+  return ref.watch(inkOpenPurchaseOrdersProvider).whenData((list) {
+    final open = list
+        .where((po) => po.isLocalTrack && po.hasOpenRemaining)
+        .toList();
+    open.sort((a, b) {
+      final byEta = etaListSortKey(a.estimatedArrival)
+          .compareTo(etaListSortKey(b.estimatedArrival));
+      if (byEta != 0) return byEta;
+      return b.pulseRef.compareTo(a.pulseRef);
+    });
+    return open;
+  });
+});
+
+/// Open local POs + open IBC/pallet import shipments with ETA in overdue…+5 SAST days.
+/// Derived from existing streams (no extra listeners).
+final inkExpectedDeliveriesProvider =
+    Provider<List<InkExpectedDelivery>>((ref) {
+  final orders =
+      ref.watch(inkOpenLocalPurchaseOrdersProvider).valueOrNull ?? const [];
+  final shipments =
+      ref.watch(inkOpenImportShipmentsProvider).valueOrNull ?? const [];
+  return buildExpectedDeliveries(
+    localOrders: orders,
+    shipments: shipments,
+  );
 });
 
 /// Fulfilled local POs received in the open count-to-count period (one-shot).

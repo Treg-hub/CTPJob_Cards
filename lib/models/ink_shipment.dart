@@ -102,6 +102,7 @@ class InkShipment {
     this.cgnaNumber,
     this.containerNumber,
     this.purchaseOrderId,
+    this.expectedArrival,
     this.lines = const [],
     this.expectedUnits = const [],
     this.receivedUnits = const [],
@@ -117,6 +118,8 @@ class InkShipment {
   final String? cgnaNumber;
   final String? containerNumber;
   final String? purchaseOrderId;
+  /// Ship date + import lead (default) or manager override — Pulse `expected_arrival`.
+  final DateTime? expectedArrival;
   final List<InkShipmentLine> lines;
   final List<InkExpectedUnit> expectedUnits;
   final List<InkReceivedUnit> receivedUnits;
@@ -162,6 +165,7 @@ class InkShipment {
     List<Map<String, dynamic>> maps(String k) =>
         ((d[k] as List?) ?? []).whereType<Map<String, dynamic>>().toList();
     final updatedRaw = d['updated_at'];
+    final etaRaw = d['expected_arrival'];
     return InkShipment(
       id: doc.id,
       orderNumber: d['order_number'] as String? ?? '',
@@ -171,6 +175,7 @@ class InkShipment {
       cgnaNumber: d['cgna_number'] as String?,
       containerNumber: d['container_number'] as String?,
       purchaseOrderId: d['purchase_order_id'] as String?,
+      expectedArrival: etaRaw is Timestamp ? etaRaw.toDate() : null,
       lines: maps('lines').map(InkShipmentLine.fromMap).toList(),
       expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
       receivedUnits: maps('received_units').map(InkReceivedUnit.fromMap).toList(),

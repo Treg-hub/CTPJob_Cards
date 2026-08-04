@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-04 — 2.3.0+199 — Ink expected orders
+
+### What you will notice
+
+- **Ink Factory** home shows **Expected Orders** when a delivery is **due or overdue** (today and the next 5 days, estimated dates).
+- Local orders show **supplier and products**; import shows the **shipment id** (IBC and pallet).
+- **Receive Local** and **Receive Ink** lists show **ETA (est.)** chips so you can see what is due before you unload.
+- Pallet import loads appear on **Receive Ink** with the IBC list — open one to enter kg received per line.
+
+---
+
 ## 2026-08-03 — 2.3.0+198 — Waste Copper Skins weighing
 
 ### What you will notice
