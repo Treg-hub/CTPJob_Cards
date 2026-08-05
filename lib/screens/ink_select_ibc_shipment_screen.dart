@@ -40,6 +40,41 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _maybeReplaceDn(
+    BuildContext context,
+    WidgetRef ref,
+    InkShipment shipment,
+  ) async {
+    if (!shipment.canReplaceDeliveryNote) {
+      _alreadyComplete(context);
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Replace delivery note?'),
+        content: Text(
+          'Shipment ${shipment.id} already has a delivery note. '
+          'You can recapture within the stores-pack window (before the pack is emailed). '
+          'This restarts the ~60 minute send timer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Replace'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await openInkDeliveryNoteCapture(context, shipment: shipment);
+    if (context.mounted) invalidateInkReceivedPeriodLists(ref);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final receivedAsync = ref.watch(inkReceivedIbcShipmentsThisPeriodProvider);
@@ -228,7 +263,8 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Complete — delivery note on file.',
+                          'Complete — delivery note on file. Tap a row to replace the DN '
+                          'before the stores pack is emailed (~60 min after capture).',
                           style: TextStyle(
                             color: scheme.onSurfaceVariant,
                             fontSize: 12,
@@ -241,7 +277,7 @@ class InkSelectIbcShipmentScreen extends ConsumerWidget {
                             qty: _qty,
                             received: true,
                             dateFormat: _date,
-                            onTap: () => _alreadyComplete(context),
+                            onTap: () => _maybeReplaceDn(context, ref, s),
                           ),
                       ],
                     ],

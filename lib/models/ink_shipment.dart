@@ -107,6 +107,7 @@ class InkShipment {
     this.expectedUnits = const [],
     this.receivedUnits = const [],
     this.deliveryNote,
+    this.storesSentAt,
     this.updatedAt,
   });
 
@@ -124,6 +125,8 @@ class InkShipment {
   final List<InkExpectedUnit> expectedUnits;
   final List<InkReceivedUnit> receivedUnits;
   final InkDeliveryNote? deliveryNote;
+  /// When set, stores pack already emailed — do not re-capture DN on floor.
+  final DateTime? storesSentAt;
   final DateTime? updatedAt;
 
   bool get isIbc => packagingMode == 'ibc';
@@ -144,6 +147,10 @@ class InkShipment {
           status == InkShipmentStatus.costed);
 
   bool get hasDeliveryNote => deliveryNote != null;
+
+  /// DN photo can be replaced until the automated stores pack is sent.
+  bool get canReplaceDeliveryNote =>
+      hasDeliveryNote && storesSentAt == null;
 
   /// Distinct item codes expected on this shipment (for the colour dropdown).
   List<String> get itemCodes =>
@@ -180,6 +187,9 @@ class InkShipment {
       expectedUnits: maps('expected_units').map(InkExpectedUnit.fromMap).toList(),
       receivedUnits: maps('received_units').map(InkReceivedUnit.fromMap).toList(),
       deliveryNote: InkDeliveryNote.fromMap(d['delivery_note']),
+      storesSentAt: d['stores_sent_at'] is Timestamp
+          ? (d['stores_sent_at'] as Timestamp).toDate()
+          : null,
       updatedAt: updatedRaw is Timestamp ? updatedRaw.toDate() : null,
     );
   }

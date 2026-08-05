@@ -100,6 +100,7 @@ class InkPurchaseOrder {
     this.pastelRfoNumber,
     this.estimatedArrival,
     this.deliveryNote,
+    this.storesSentAt,
     this.signedRfoPdfPath,
     this.rfoPdfPath,
     this.updatedAt,
@@ -117,6 +118,8 @@ class InkPurchaseOrder {
   final String? pastelRfoNumber;
   final DateTime? estimatedArrival;
   final InkDeliveryNote? deliveryNote;
+  /// When set, stores pack already emailed — do not re-capture DN on floor.
+  final DateTime? storesSentAt;
   final String? signedRfoPdfPath;
   final String? rfoPdfPath;
   final DateTime? updatedAt;
@@ -130,6 +133,10 @@ class InkPurchaseOrder {
   bool get hasOpenRemaining => totalRemaining > 1e-6;
 
   bool get hasDeliveryNote => deliveryNote != null;
+
+  /// DN photo can be replaced until the automated stores pack is sent.
+  bool get canReplaceDeliveryNote =>
+      hasDeliveryNote && storesSentAt == null;
 
   /// Fulfilled local order still waiting for transporter DN photo.
   bool get needsDeliveryNote =>
@@ -215,6 +222,7 @@ class InkPurchaseOrder {
       pastelRfoNumber: d['pastel_rfo_number'] as String?,
       estimatedArrival: eta,
       deliveryNote: InkDeliveryNote.fromMap(d['delivery_note']),
+      storesSentAt: asDate(d['stores_sent_at']),
       signedRfoPdfPath: d['signed_rfo_pdf_path'] as String?,
       rfoPdfPath: d['rfo_pdf_path'] as String?,
       updatedAt: asDate(d['updated_at']),
