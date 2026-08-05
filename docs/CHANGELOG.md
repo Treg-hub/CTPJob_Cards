@@ -6,6 +6,16 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-05 — 2.3.0+202 — Ink delivery note replace
+
+### What you will notice
+
+- After stock is received, **Receive Ink** and **Receive Local** grey **Complete** rows can open again to **replace the delivery note** if you captured the wrong photo or number.
+- Only works while the pack has **not** been sent to stores yet; after that the row stays locked.
+- Replacing the note restarts the short wait before stores receive the pack.
+
+---
+
 ## 2026-08-04 — 2.3.0+201 — Admin walk notes
 
 ### What you will notice
