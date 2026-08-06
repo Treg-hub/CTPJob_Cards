@@ -1268,23 +1268,30 @@ class InkService {
 
   /// Deduct receipt qty from PO remaining via CF `applyInkPurchaseOrderReceipt`
   /// (Wave B — clients cannot write remaining/status on ink_purchase_orders).
-  /// Idempotent per [receiptKey].
-  Future<void> applyReceiptToPurchaseOrder({
+  /// Idempotent per [receiptKey]. Small shortfalls (≤1% of ordered) are
+  /// auto-written-off server-side; larger residuals stay open for manager finalize.
+  ///
+  /// Returns CF payload (status, remaining, auto_write_off_kg_by_item) when present.
+  Future<Map<String, dynamic>> applyReceiptToPurchaseOrder({
     required String purchaseOrderId,
     required String itemCode,
     required double quantity,
     required String receiptKey,
   }) async {
-    if (purchaseOrderId.isEmpty || quantity <= 0 || receiptKey.isEmpty) return;
+    if (purchaseOrderId.isEmpty || quantity <= 0 || receiptKey.isEmpty) {
+      return const {};
+    }
 
     final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
         .httpsCallable('applyInkPurchaseOrderReceipt');
-    await callable.call<Map<String, dynamic>>({
+    final result = await callable.call<Map<String, dynamic>>({
       'purchase_order_id': purchaseOrderId,
       'item_code': itemCode,
       'quantity': quantity,
       'receipt_key': receiptKey,
     });
+    final data = result.data;
+    return data == null ? const {} : Map<String, dynamic>.from(data);
   }
 
   /// CF-mirror only — **do not call on the live IBC receive path.**
@@ -1404,7 +1411,10 @@ class InkService {
   /// receiving — pallet shipments carry several items, each received separately).
   /// When [purchaseOrderId] is given, deducts PO remaining via CF
   /// `applyInkPurchaseOrderReceipt` (idempotent via txn idempotency key).
-  Future<void> recordRawMaterialReceipt({
+  ///
+  /// Returns last local-PO CF response when a [purchaseOrderId] was applied
+  /// (status / auto write-off); empty map otherwise.
+  Future<Map<String, dynamic>> recordRawMaterialReceipt({
     required InkTransaction txn,
     String? shipmentId,
     String? purchaseOrderId,
@@ -1426,13 +1436,14 @@ class InkService {
       }, SetOptions(merge: true));
     }
     if (purchaseOrderId != null && purchaseOrderId.isNotEmpty) {
-      await applyReceiptToPurchaseOrder(
+      return applyReceiptToPurchaseOrder(
         purchaseOrderId: purchaseOrderId,
         itemCode: txn.stockItemCode,
         quantity: txn.quantityDelta,
         receiptKey: txn.idempotencyKey,
       );
     }
+    return const {};
   }
 
   /// Upload signed transporter delivery-note photo, then CF

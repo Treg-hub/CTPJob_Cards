@@ -11,8 +11,16 @@ import '../providers/current_employee_provider.dart';
 import '../providers/ink_provider.dart';
 import '../services/ink_delivery_note_ocr_service.dart';
 import '../utils/ink_delivery_note_flow.dart';
+import '../utils/ink_post_receive_tank_dip.dart';
 import '../utils/persona_audit.dart';
 import '../utils/screen_insets.dart';
+
+/// Result of a successful DN save (may include post-receive tank dip offer).
+class InkDeliveryNoteCaptureResult {
+  const InkDeliveryNoteCaptureResult({this.dipOffer});
+
+  final InkPostReceiveDipOffer? dipOffer;
+}
 
 /// Capture signed transporter delivery note for a received shipment or local PO.
 class InkCaptureDeliveryNoteScreen extends ConsumerStatefulWidget {
@@ -202,7 +210,13 @@ class _InkCaptureDeliveryNoteScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Delivery note saved — load complete')),
       );
-      Navigator.pop(context, true);
+      final dipOffer = widget.shipment != null
+          ? dipOfferFromShipment(widget.shipment!)
+          : dipOfferFromLocalOrder(widget.order!);
+      Navigator.pop(
+        context,
+        InkDeliveryNoteCaptureResult(dipOffer: dipOffer),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

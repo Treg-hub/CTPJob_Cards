@@ -13,7 +13,21 @@ import '../utils/screen_insets.dart';
 
 /// Record tank dips and edit capacity / low thresholds.
 class InkTankLevelsScreen extends ConsumerStatefulWidget {
-  const InkTankLevelsScreen({super.key});
+  const InkTankLevelsScreen({
+    super.key,
+    this.focusItemCodes = const [],
+    this.receivedHints = const {},
+    this.postReceiveContext = false,
+  });
+
+  /// Highlight these tanks (e.g. after post-DN receive).
+  final List<String> focusItemCodes;
+
+  /// Optional qty received on this load (itemCode → qty) for operator guidance.
+  final Map<String, double> receivedHints;
+
+  /// Softer copy when opened from the post-delivery-note dip prompt.
+  final bool postReceiveContext;
 
   @override
   ConsumerState<InkTankLevelsScreen> createState() =>
@@ -179,15 +193,30 @@ class _InkTankLevelsScreenState extends ConsumerState<InkTankLevelsScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Physical dip / sight-glass. Overwrites the live estimate. '
-                'Mon & Fri morning with meters; Toloul mid-week as needed.',
+                widget.postReceiveContext
+                    ? 'Physical dip / sight-glass after this receive. '
+                        'Overwrites the live estimate. Enter the level now '
+                        'in the tank (not yard stock). Other tanks can stay '
+                        'as shown.'
+                    : 'Physical dip / sight-glass. Overwrites the live estimate. '
+                        'Mon & Fri morning with meters; Toloul mid-week as needed.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (widget.focusItemCodes.isNotEmpty ||
+                  widget.receivedHints.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _PostReceiveHintBanner(
+                  focusItemCodes: widget.focusItemCodes,
+                  receivedHints: widget.receivedHints,
+                ),
+              ],
               const SizedBox(height: 12),
               for (final t in tanks) ...[
                 _DipRow(
                   tank: t,
                   balanceCtrl: _balanceCtrls[t.itemCode]!,
+                  highlighted: widget.focusItemCodes.contains(t.itemCode),
+                  receivedHint: widget.receivedHints[t.itemCode],
                 ),
                 const SizedBox(height: 8),
               ],
@@ -241,38 +270,116 @@ class _InkTankLevelsScreenState extends ConsumerState<InkTankLevelsScreen> {
   }
 }
 
-class _DipRow extends StatelessWidget {
-  const _DipRow({required this.tank, required this.balanceCtrl});
+class _PostReceiveHintBanner extends StatelessWidget {
+  const _PostReceiveHintBanner({
+    required this.focusItemCodes,
+    required this.receivedHints,
+  });
 
-  final InkTankLevel tank;
-  final TextEditingController balanceCtrl;
+  final List<String> focusItemCodes;
+  final Map<String, double> receivedHints;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 72,
-          child: Text(
-            tank.displayName,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        Expanded(
-          child: TextField(
-            controller: balanceCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Level (${tank.unit})',
-              isDense: true,
-              border: const OutlineInputBorder(),
+    final scheme = Theme.of(context).colorScheme;
+    final parts = <String>[];
+    final codes = focusItemCodes.isNotEmpty
+        ? focusItemCodes
+        : receivedHints.keys.toList();
+    for (final code in codes) {
+      final name = kTankDisplayNames[code] ?? code;
+      final unit = kTankUnits[code] ?? '';
+      final q = receivedHints[code];
+      if (q != null && q > 0) {
+        final qtyStr = q == q.roundToDouble()
+            ? q.toStringAsFixed(0)
+            : q.toStringAsFixed(1);
+        parts.add('$name +~$qtyStr $unit this load');
+      } else {
+        parts.add(name);
+      }
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Text(
+        'From this delivery: ${parts.join(' · ')}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+}
+
+class _DipRow extends StatelessWidget {
+  const _DipRow({
+    required this.tank,
+    required this.balanceCtrl,
+    this.highlighted = false,
+    this.receivedHint,
+  });
+
+  final InkTankLevel tank;
+  final TextEditingController balanceCtrl;
+  final bool highlighted;
+  final double? receivedHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final hint = receivedHint;
+    final helper = hint != null && hint > 0
+        ? 'This load ~${hint == hint.roundToDouble() ? hint.toStringAsFixed(0) : hint.toStringAsFixed(1)} ${tank.unit} — enter tank total after fill'
+        : null;
+    return Container(
+      padding: highlighted ? const EdgeInsets.all(8) : EdgeInsets.zero,
+      decoration: highlighted
+          ? BoxDecoration(
+              color: scheme.primaryContainer.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: scheme.primary.withValues(alpha: 0.45),
+              ),
+            )
+          : null,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 72,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                tank.displayName,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: highlighted ? scheme.primary : null,
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+          Expanded(
+            child: TextField(
+              controller: balanceCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+              ],
+              decoration: InputDecoration(
+                labelText: 'Level (${tank.unit})',
+                helperText: helper,
+                isDense: true,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

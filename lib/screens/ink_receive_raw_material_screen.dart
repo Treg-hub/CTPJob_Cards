@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/ink_purchase_order.dart';
+import '../utils/ink_po_fulfillment.dart';
 import '../models/ink_shipment.dart';
 import '../models/ink_stock_item.dart';
 import '../models/ink_transaction.dart';
@@ -169,6 +170,7 @@ class _InkReceiveRawMaterialScreenState
 
     var recorded = 0;
     Object? lastError;
+    Map<String, dynamic> lastPoResult = const {};
     for (final line in lines) {
       final txn = InkTransaction(
         type: InkTxnType.purchase,
@@ -185,7 +187,7 @@ class _InkReceiveRawMaterialScreenState
         shipmentId: shipmentId,
       );
       try {
-        await service.recordRawMaterialReceipt(
+        lastPoResult = await service.recordRawMaterialReceipt(
           txn: txn,
           purchaseOrderId: purchaseOrderId,
           shipmentId: shipmentId,
@@ -214,15 +216,84 @@ class _InkReceiveRawMaterialScreenState
       return;
     }
     final n = lines.length;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        n == 1
-            ? 'Receipt saved — marked received.'
-            : '$n line receipts saved — marked received.',
-      ),
-    ));
+    final message = _receiptSuccessMessage(
+      lineCount: n,
+      againstPo: purchaseOrderId != null && purchaseOrderId.isNotEmpty,
+      poResult: lastPoResult,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     invalidateInkReceivedPeriodLists(ref);
     Navigator.pop(context);
+  }
+
+  String _receiptSuccessMessage({
+    required int lineCount,
+    required bool againstPo,
+    required Map<String, dynamic> poResult,
+  }) {
+    if (!againstPo || poResult.isEmpty) {
+      return lineCount == 1
+          ? 'Receipt saved — marked received.'
+          : '$lineCount line receipts saved — marked received.';
+    }
+    final status = poResult['status'] as String? ?? '';
+    final autoOff = poResult['auto_write_off_kg_by_item'];
+    var autoTotal = 0.0;
+    if (autoOff is Map) {
+      for (final v in autoOff.values) {
+        if (v is num) autoTotal += v.toDouble();
+      }
+    }
+    final remaining = poResult['remaining_kg_by_item'];
+    var openTotal = 0.0;
+    if (remaining is Map) {
+      for (final v in remaining.values) {
+        if (v is num) openTotal += v.toDouble();
+      }
+    }
+    final base = lineCount == 1
+        ? 'Receipt saved'
+        : '$lineCount line receipts saved';
+    if (status == 'fulfilled' && autoTotal > inkPoFulfilledThreshold) {
+      return '$base — order closed (small shortfall auto-accepted ≤1%).';
+    }
+    if (status == 'fulfilled') {
+      return '$base — order fully received.';
+    }
+    if (openTotal > inkPoFulfilledThreshold) {
+      return '$base — residual left open. If no further delivery, a manager '
+          'must finalize the order on Pulse.';
+    }
+    return '$base — marked received.';
+  }
+
+  /// Live helper under each line qty field (preview of auto vs manager residual).
+  String? _varianceHelper({
+    required double remaining,
+    required double ordered,
+    required String unit,
+    TextEditingController? ctrl,
+  }) {
+    final raw = ctrl?.text.trim() ?? '';
+    if (raw.isEmpty) return null;
+    final qty = double.tryParse(raw);
+    if (qty == null || qty <= 0) return null;
+    final residual = residualAfterReceipt(
+      remainingBefore: remaining,
+      quantityReceived: qty,
+    );
+    if (residual <= inkPoFulfilledThreshold) {
+      return 'Matches remaining — line will close.';
+    }
+    final ord = ordered > 0 ? ordered : remaining;
+    final pct = ord > 0 ? (residual / ord) * 100 : 0.0;
+    final qtyFmt = NumberFormat('#,##0.##');
+    if (residualWithinAutoVariance(residual: residual, ordered: ord)) {
+      return 'Short ${qtyFmt.format(residual)} $unit '
+          '(${pct.toStringAsFixed(2)}%) — within 1%; order can auto-close.';
+    }
+    return 'Short ${qtyFmt.format(residual)} $unit '
+        '(${pct.toStringAsFixed(1)}%) — stays open; manager finalize if no more delivery.';
   }
 
   Future<void> _submitAgainstPo() => _submitMultiLine(
@@ -474,7 +545,16 @@ class _InkReceiveRawMaterialScreenState
                         suffixText: e.line.unit,
                         border: const OutlineInputBorder(),
                         isDense: true,
+                        helperText: _varianceHelper(
+                          remaining: e.remaining,
+                          ordered: e.line.finalKg > 0
+                              ? e.line.finalKg
+                              : e.remaining,
+                          unit: e.line.unit,
+                          ctrl: _lineQtyCtrls[e.line.itemCode],
+                        ),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ],
                 ),
@@ -510,8 +590,9 @@ class _InkReceiveRawMaterialScreenState
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Over/under remaining is allowed — residual stays on the '
-                  'order until fully received or a manager finalizes on Pulse. '
+                  'Partial receives are OK. Shortfall ≤1% of ordered auto-closes '
+                  'the line (delivery variance). Larger shortfalls stay open — '
+                  'receive the rest later or a manager finalizes on Pulse. '
                   'Cost is entered by a manager later.',
                 ),
               ),

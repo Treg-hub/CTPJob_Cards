@@ -44,6 +44,32 @@ void main() {
     });
   });
 
+  group('auto delivery variance', () {
+    test('56 of 10000 residual is within 1%', () {
+      expect(
+        residualWithinAutoVariance(residual: 56, ordered: 10000),
+        isTrue,
+      );
+    });
+
+    test('500 of 10000 residual needs manager', () {
+      expect(
+        residualWithinAutoVariance(residual: 500, ordered: 10000),
+        isFalse,
+      );
+    });
+
+    test('applyAutoDeliveryVariance closes 9944 shortfall', () {
+      final r = applyAutoDeliveryVariance(
+        remainingKgByItem: {'toloul': 56},
+        orderedKgByItem: {'toloul': 10000},
+      );
+      expect(r.writeOffKgByItem['toloul'], 56);
+      expect(r.remainingKgByItem['toloul'], 0);
+      expect(r.status, 'fulfilled');
+    });
+  });
+
   group('applyShipmentDeduction', () {
     test('deducts received kg per item', () {
       final result = applyShipmentDeduction(
