@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-06 — 2.3.0+203 — Imp Rollers date and time
+
+### What you will notice
+
+- **Imp Rollers** start build, electrical complete, and install from spares show a **date and time** stamp (above shaft on build and install).
+- **Managers** and **admins** can change the stamp; other roles see the current time only.
+
+---
+
 ## 2026-08-05 — 2.3.0+202 — Ink delivery note replace
 
 ### What you will notice
