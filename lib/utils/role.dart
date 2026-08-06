@@ -508,6 +508,12 @@ bool isImpressionManagerOffSiteAllowed(Employee? employee) {
   return employee.position.toLowerCase().contains('manager');
 }
 
+/// Managers + dual [isAdmin] may back-date / adjust impression event timestamps
+/// (start-build, install). Floor roles always use "now".
+bool canEditImpressionTimestamp(Employee? employee) {
+  return isImpressionManagerOffSiteAllowed(employee);
+}
+
 // =============================================================================
 // PRESS MANUALS (short packs + OEM library)
 // =============================================================================

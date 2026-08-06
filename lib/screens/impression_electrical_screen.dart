@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../main.dart' show currentEmployee;
 import '../services/impression_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/ink_pickers.dart';
+import '../utils/role.dart' as role_utils;
 import '../widgets/impression_app_bar.dart';
 import '../widgets/impression_tip_banner.dart';
 
@@ -34,6 +38,10 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
   bool _pass = true;
   String _esa = 'full';
   bool _saving = false;
+  DateTime _effectiveAt = DateTime.now();
+
+  bool get _canEditTimestamp =>
+      role_utils.canEditImpressionTimestamp(currentEmployee);
 
   @override
   void dispose() {
@@ -44,6 +52,12 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
       c.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _pickTimestamp() async {
+    if (!_canEditTimestamp) return;
+    final dt = await pickInkDateTime(context, _effectiveAt);
+    if (dt != null && mounted) setState(() => _effectiveAt = dt);
   }
 
   Future<void> _submit() async {
@@ -65,6 +79,7 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
           },
           'comments': _comments.text.trim(),
         },
+        effectiveAt: _effectiveAt,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Electrical saved')));
@@ -76,6 +91,51 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Widget _buildTimestampField(BuildContext context) {
+    final df = DateFormat('EEE d MMM yyyy · HH:mm');
+    final label = 'Date & time: ${df.format(_effectiveAt)}';
+    if (_canEditTimestamp) {
+      return OutlinedButton.icon(
+        onPressed: _pickTimestamp,
+        icon: const Icon(Icons.event),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          alignment: Alignment.centerLeft,
+        ),
+      );
+    }
+    return Container(
+      height: 52,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.event,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -93,9 +153,22 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
             tipId: 'electrical',
             text: ImpressionTipBanner.tips['electrical']!,
           ),
+          _buildTimestampField(context),
+          if (_canEditTimestamp)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 8),
+              child: Text(
+                'Managers and admins can adjust the date and time.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            )
+          else
+            const SizedBox(height: 8),
           Text(
             '${d['shaftNo']} / ${d['sleeveId']} · ${d['pressId']}',
-            style: TextStyle(color: onSurface),
+            style: TextStyle(color: onSurface, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           Text(

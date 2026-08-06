@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/collections.dart';
@@ -8,6 +9,7 @@ import '../models/employee.dart';
 import '../models/impression_settings.dart';
 import '../services/impression_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/ink_pickers.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart';
 import '../widgets/ctp_app_bar.dart';
@@ -661,40 +663,174 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
       ),
     );
     if (chosen == null || !mounted) return;
-    await _installCycle(chosen.id, unitNo, chosen.data()['esaSuitability']?.toString());
+    final m = chosen.data();
+    await _installCycle(
+      chosen.id,
+      unitNo,
+      m['esaSuitability']?.toString(),
+      shaftNo: m['shaftNo']?.toString(),
+      sleeveId: m['sleeveId']?.toString(),
+      unitFixed: true,
+    );
   }
 
   Future<void> _pickUnitAndInstall(String cycleId, String? esa) async {
-    final unitCtrl = TextEditingController(text: '1');
-    final unit = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Install on unit'),
-        content: TextField(
-          controller: unitCtrl,
-          decoration: const InputDecoration(labelText: 'Unit 1–8'),
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, int.tryParse(unitCtrl.text)),
-            child: const Text('Install'),
-          ),
-        ],
-      ),
+    String? shaftNo;
+    String? sleeveId;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(Collections.impressionCycles)
+          .doc(cycleId)
+          .get();
+      final m = snap.data();
+      shaftNo = m?['shaftNo']?.toString();
+      sleeveId = m?['sleeveId']?.toString();
+    } catch (_) {}
+    if (!mounted) return;
+    await _installCycle(
+      cycleId,
+      1,
+      esa,
+      shaftNo: shaftNo,
+      sleeveId: sleeveId,
+      unitFixed: false,
     );
-    if (unit == null || !mounted) return;
-    await _installCycle(cycleId, unit, esa);
   }
 
-  Future<void> _installCycle(String cycleId, int unitNo, String? esa) async {
+  /// Confirm install: date/time (manager/admin editable) above shaft number, then unit.
+  Future<void> _installCycle(
+    String cycleId,
+    int unitNo,
+    String? esa, {
+    String? shaftNo,
+    String? sleeveId,
+    bool unitFixed = true,
+  }) async {
+    final canEditTs = canEditImpressionTimestamp(currentEmployee);
+    final unitCtrl = TextEditingController(text: '$unitNo');
+    var effectiveAt = DateTime.now();
+    final confirmed = await showDialog<_InstallConfirmResult>(
+      context: context,
+      builder: (ctx) {
+        final df = DateFormat('EEE d MMM yyyy · HH:mm');
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            Future<void> pickTs() async {
+              if (!canEditTs) return;
+              final dt = await pickInkDateTime(ctx, effectiveAt);
+              if (dt != null) setLocal(() => effectiveAt = dt);
+            }
+
+            return AlertDialog(
+              title: const Text('Install roller'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (canEditTs)
+                      OutlinedButton.icon(
+                        onPressed: pickTs,
+                        icon: const Icon(Icons.event),
+                        label: Text('Date & time: ${df.format(effectiveAt)}'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          alignment: Alignment.centerLeft,
+                        ),
+                      )
+                    else
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Date & time',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.event),
+                        ),
+                        child: Text(df.format(effectiveAt)),
+                      ),
+                    if (canEditTs)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 8),
+                        child: Text(
+                          'Managers and admins can adjust the date and time.',
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Shaft (Roller No.)',
+                        border: OutlineInputBorder(),
+                      ),
+                      child: Text(
+                        (shaftNo != null && shaftNo.isNotEmpty) ? shaftNo : '—',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Sleeve',
+                        border: OutlineInputBorder(),
+                      ),
+                      child: Text(
+                        (sleeveId != null && sleeveId.isNotEmpty) ? sleeveId : '—',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (unitFixed)
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Unit',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text('$unitNo'),
+                      )
+                    else
+                      TextField(
+                        controller: unitCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Unit 1–8 *',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final u = unitFixed
+                        ? unitNo
+                        : int.tryParse(unitCtrl.text.trim());
+                    if (u == null || u < 1 || u > 8) return;
+                    Navigator.pop(
+                      ctx,
+                      _InstallConfirmResult(unitNo: u, effectiveAt: effectiveAt),
+                    );
+                  },
+                  child: const Text('Install'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    unitCtrl.dispose();
+    if (confirmed == null || !mounted) return;
+
     var override = false;
     String? note;
     if (esa == 'yellow_only') {
       final pressCfg = _settings.presses[_pressId];
       final noEsa = pressCfg?.noEsaUnits ?? [];
-      if (!noEsa.contains(unitNo)) {
+      if (!noEsa.contains(confirmed.unitNo)) {
         final go = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -716,10 +852,11 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
     try {
       await ImpressionService.instance.installRoller(
         pressId: _pressId,
-        unitNo: unitNo,
+        unitNo: confirmed.unitNo,
         cycleId: cycleId,
         yellowOnlyOverride: override,
         yellowOnlyNote: note,
+        effectiveAt: confirmed.effectiveAt,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Installed')));
@@ -970,4 +1107,14 @@ class _CycleQueue extends StatelessWidget {
       },
     );
   }
+}
+
+class _InstallConfirmResult {
+  final int unitNo;
+  final DateTime effectiveAt;
+
+  const _InstallConfirmResult({
+    required this.unitNo,
+    required this.effectiveAt,
+  });
 }

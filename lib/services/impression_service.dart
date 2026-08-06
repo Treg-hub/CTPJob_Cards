@@ -85,6 +85,8 @@ class ImpressionService {
     String? rematchReason,
     Map<String, dynamic>? mechanical,
     String? clientRef,
+    /// Manager/admin only — ISO-8601; CF ignores for non-managers.
+    DateTime? effectiveAt,
   }) {
     return _call('startImpressionBuild', {
       'shaftNo': shaftNo,
@@ -95,6 +97,7 @@ class ImpressionService {
       if (rematchReason != null) 'rematchReason': rematchReason,
       if (mechanical != null) 'mechanical': mechanical,
       if (clientRef != null) 'client_ref': clientRef,
+      if (effectiveAt != null) 'effectiveAt': effectiveAt.toUtc().toIso8601String(),
     });
   }
 
@@ -103,12 +106,15 @@ class ImpressionService {
     required bool pass,
     required String esaSuitability,
     Map<String, dynamic>? electrical,
+    /// Manager/admin only — ISO-8601; CF ignores for non-managers.
+    DateTime? effectiveAt,
   }) {
     return _call('completeImpressionElectrical', {
       'cycleId': cycleId,
       'pass': pass,
       'esaSuitability': esaSuitability,
       if (electrical != null) 'electrical': electrical,
+      if (effectiveAt != null) 'effectiveAt': effectiveAt.toUtc().toIso8601String(),
     });
   }
 
@@ -136,6 +142,8 @@ class ImpressionService {
     required String cycleId,
     bool yellowOnlyOverride = false,
     String? yellowOnlyNote,
+    /// Manager/admin only — ISO-8601; CF ignores for non-managers.
+    DateTime? effectiveAt,
   }) {
     return _call('installImpressionRoller', {
       'pressId': pressId,
@@ -143,6 +151,7 @@ class ImpressionService {
       'cycleId': cycleId,
       'yellowOnlyOverride': yellowOnlyOverride,
       if (yellowOnlyNote != null) 'yellowOnlyNote': yellowOnlyNote,
+      if (effectiveAt != null) 'effectiveAt': effectiveAt.toUtc().toIso8601String(),
     });
   }
 
