@@ -1290,8 +1290,8 @@ class InkService {
       'quantity': quantity,
       'receipt_key': receiptKey,
     });
-    final data = result.data;
-    return data == null ? const {} : Map<String, dynamic>.from(data);
+    // call<Map<…>> types data as non-null; still copy for a free map.
+    return Map<String, dynamic>.from(result.data);
   }
 
   /// CF-mirror only — **do not call on the live IBC receive path.**

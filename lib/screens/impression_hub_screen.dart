@@ -383,11 +383,10 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     onAction: _canMech
                         ? (id, _) async {
                             await ImpressionService.instance.receive(cycleId: id);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Received — start new build')),
-                              );
-                            }
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Received — start new build')),
+                            );
                             _refreshCounts();
                           }
                         : null,
@@ -410,11 +409,10 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                                 builder: (_) => ImpressionStartBuildScreen(pressId: _pressId),
                               ),
                             );
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Use shaft $shaft / sleeve $sleeve')),
-                              );
-                            }
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Use shaft $shaft / sleeve $sleeve')),
+                            );
                           }
                         : null,
                     onOpen: _openCycle,

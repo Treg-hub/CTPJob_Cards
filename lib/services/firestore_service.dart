@@ -602,7 +602,7 @@ class FirestoreService {
         'lastUpdatedBy': byClockNo,
         'lastUpdatedByName': byName,
         'assignmentHistory': FieldValue.arrayUnion([event.toFirestore()]),
-        'notes': (current.notes.isEmpty ? '' : current.notes) + '\n\n$statusNarrative',
+        'notes': '${current.notes.isEmpty ? '' : current.notes}\n\n$statusNarrative',
         'notesLog': FieldValue.arrayUnion([logEntry]),
       };
       // Close / monitor via status picker must capture fix narrative in CA.
