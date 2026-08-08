@@ -28,6 +28,7 @@ import '../models/ink_txn_type.dart';
 import '../utils/ink_tank_delta.dart';
 import '../utils/persona_audit.dart';
 import '../constants/ink_toloul.dart';
+import 'app_storage.dart';
 import 'connectivity_service.dart';
 import 'resilient_stream.dart';
 import 'waste_stock_crosslink.dart';
@@ -1502,10 +1503,11 @@ class InkService {
         ? 'ink/$id/delivery-note-${DateTime.now().millisecondsSinceEpoch}$ext'
         : 'ink/orders/$id/delivery-note-${DateTime.now().millisecondsSinceEpoch}$ext';
 
-    await FirebaseStorage.instance.ref(storagePath).putFile(
-          file,
-          SettableMetadata(contentType: safeType),
-        );
+    await AppStorage.putFilePathOnly(
+      storagePath,
+      file,
+      metadata: SettableMetadata(contentType: safeType),
+    );
 
     final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
         .httpsCallable('attachInkDeliveryNote');
@@ -1556,10 +1558,11 @@ class InkService {
     final storagePath =
         'ink/orders/$id/signed-rfo-${DateTime.now().millisecondsSinceEpoch}$ext';
 
-    await FirebaseStorage.instance.ref(storagePath).putFile(
-          file,
-          SettableMetadata(contentType: safeType),
-        );
+    await AppStorage.putFilePathOnly(
+      storagePath,
+      file,
+      metadata: SettableMetadata(contentType: safeType),
+    );
 
     final callable = FirebaseFunctions.instanceFor(region: 'africa-south1')
         .httpsCallable('attachInkSignedRfo');

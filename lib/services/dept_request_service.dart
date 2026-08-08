@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants/collections.dart';
 import '../utils/persona_audit.dart';
+import 'app_storage.dart';
 
 /// Photos + create/ack/done helpers for Dept Requests.
 ///
@@ -21,7 +22,6 @@ class DeptRequestService {
   static final DeptRequestService instance = DeptRequestService._();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'africa-south1');
 
@@ -67,18 +67,18 @@ class DeptRequestService {
     _guardWrite();
     if (localPaths.isEmpty) return const [];
     final urls = <String>[];
-    for (final path in localPaths) {
-      final file = File(path);
+    for (final localPath in localPaths) {
+      final file = File(localPath);
       if (!file.existsSync()) {
         throw Exception('Photo file was cleaned up before upload — please re-add it');
       }
       final fileName = '${const Uuid().v4()}.jpg';
-      final ref = _storage.ref('dept_requests/$requestId/photos/$fileName');
-      final task = await ref.putFile(
+      final storagePath = 'dept_requests/$requestId/photos/$fileName';
+      urls.add(await AppStorage.putFile(
+        storagePath,
         file,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      urls.add(await task.ref.getDownloadURL());
+        metadata: SettableMetadata(contentType: 'image/jpeg'),
+      ));
     }
     return urls;
   }

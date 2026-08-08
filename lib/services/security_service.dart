@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:uuid/uuid.dart';
@@ -20,6 +19,7 @@ import '../models/security_vehicle.dart';
 import '../models/security_vehicle_trip.dart';
 import 'connectivity_service.dart';
 import '../utils/persona_audit.dart';
+import 'app_storage.dart';
 import 'sync_service.dart';
 
 /// Site Security operations — gate logging, compliance, offline queue.
@@ -31,7 +31,6 @@ class SecurityService {
   SecurityService._internal();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'africa-south1');
 
@@ -818,11 +817,11 @@ class SecurityService {
       );
     } catch (_) {}
 
-    final ref = _storage.ref('security_vehicle_costs/$costId/receipt.jpg');
-    final snapshot = compressed != null
-        ? await ref.putData(compressed)
-        : await ref.putFile(file);
-    return snapshot.ref.getDownloadURL();
+    final path = 'security_vehicle_costs/$costId/receipt.jpg';
+    if (compressed != null) {
+      return AppStorage.putData(path, compressed);
+    }
+    return AppStorage.putFile(path, file);
   }
 
   /// Records a company car cost via the addSecurityVehicleCost Cloud
@@ -910,11 +909,11 @@ class SecurityService {
     } catch (_) {}
 
     final fileName = '${const Uuid().v4()}.jpg';
-    final ref = _storage.ref('security_entries/$entryId/$fileName');
-    final snapshot = compressed != null
-        ? await ref.putData(compressed)
-        : await ref.putFile(file);
-    return snapshot.ref.getDownloadURL();
+    final path = 'security_entries/$entryId/$fileName';
+    if (compressed != null) {
+      return AppStorage.putData(path, compressed);
+    }
+    return AppStorage.putFile(path, file);
   }
 
   Future<void> queueOfflineEntryPhoto({

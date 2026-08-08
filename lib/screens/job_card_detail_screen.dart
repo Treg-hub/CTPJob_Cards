@@ -5,13 +5,13 @@ import '../utils/persona_audit.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/assignment_event.dart';
 import '../models/employee.dart';
 import '../models/job_card.dart';
+import '../services/app_storage.dart';
 import '../services/employee_roster_cache.dart';
 import '../services/firestore_service.dart';
 import '../services/job_card_actions_service.dart';
@@ -908,9 +908,7 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
       if (kIsWeb) {
         final bytes = await pickedFile.readAsBytes();
-        final storageRef = FirebaseStorage.instance.ref().child(storagePath);
-        final snapshot = await storageRef.putData(bytes);
-        downloadUrl = await snapshot.ref.getDownloadURL();
+        downloadUrl = await AppStorage.putData(storagePath, bytes);
       } else {
         final compressedFile = await FlutterImageCompress.compressAndGetFile(
           pickedFile.path,
@@ -922,9 +920,10 @@ class _JobCardDetailScreenState extends State<JobCardDetailScreen> with TickerPr
 
         if (compressedFile == null) throw Exception('Failed to compress image');
 
-        final storageRef = FirebaseStorage.instance.ref().child(storagePath);
-        final snapshot = await storageRef.putFile(File(compressedFile.path));
-        downloadUrl = await snapshot.ref.getDownloadURL();
+        downloadUrl = await AppStorage.putFile(
+          storagePath,
+          File(compressedFile.path),
+        );
       }
 
       final actor = resolveWriteActor(currentEmployee);

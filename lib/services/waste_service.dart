@@ -27,6 +27,7 @@ import '../utils/waste_stock_snapshot.dart';
 import '../utils/waste_type_routing.dart';
 import '../utils/waste_stock_mapping.dart';
 import '../models/waste_stock_source.dart';
+import 'app_storage.dart';
 import 'copper_service.dart';
 import 'resilient_stream.dart';
 
@@ -1317,10 +1318,7 @@ class WasteService {
     final fileName = '${const Uuid().v4()}.jpg';
     final storagePath = '$wasteRef/$subfolder/$fileName';
 
-    final ref = _storage.ref().child(storagePath);
-
-    final snapshot = await ref.putFile(file);
-    final downloadUrl = await snapshot.ref.getDownloadURL();
+    final downloadUrl = await AppStorage.putFile(storagePath, file);
 
     // Delete the local compressed temp file after successful upload.
     try {
@@ -1378,9 +1376,7 @@ class WasteService {
     _guardWrite();
     final fileName = 'signature_${DateTime.now().millisecondsSinceEpoch}.png';
     final storagePath = 'waste_loads/$loadId/signature/$fileName';
-    final ref = _storage.ref().child(storagePath);
-    final snapshot = await ref.putData(bytes);
-    return await snapshot.ref.getDownloadURL();
+    return AppStorage.putData(storagePath, bytes);
   }
 
   /// Writes signature bytes to a file in the persistent media queue dir

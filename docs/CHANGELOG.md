@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-08 — 2.3.0+204 — Photo and document upload reliability
+
+### What you will notice
+
+- Job card, waste, fleet, security, ink, and feedback **photos and documents** upload more reliably.
+- No change to how you take or pick photos — the same camera and gallery flows.
+
+---
+
 ## 2026-08-06 — 2.3.0+203 — Imp Rollers date and time
 
 ### What you will notice
