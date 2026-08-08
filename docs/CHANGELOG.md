@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-08 — 2.3.0+205 — Photo upload (standard path)
+
+### What you will notice
+
+- Photo and document uploads use the standard storage path again.
+- No change to camera or gallery steps when you add photos.
+
+---
+
 ## 2026-08-08 — 2.3.0+204 — Photo and document upload reliability
 
 ### What you will notice

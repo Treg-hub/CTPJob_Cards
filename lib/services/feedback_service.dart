@@ -7,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../utils/persona_audit.dart';
-import 'app_storage.dart';
 
 /// Photo helpers for the in-app feedback loop.
 ///
@@ -20,6 +19,8 @@ import 'app_storage.dart';
 class FeedbackService {
   FeedbackService._();
   static final FeedbackService instance = FeedbackService._();
+
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   static const int maxPhotosPerMessage = 3;
 
@@ -76,18 +77,18 @@ class FeedbackService {
     _guardWrite();
     if (localPaths.isEmpty) return const [];
     final urls = <String>[];
-    for (final localPath in localPaths) {
-      final file = File(localPath);
+    for (final path in localPaths) {
+      final file = File(path);
       if (!file.existsSync()) {
         throw Exception('Photo file was cleaned up before upload — please re-add it');
       }
       final fileName = '${const Uuid().v4()}.jpg';
-      final storagePath = '$storagePrefix/$fileName';
-      urls.add(await AppStorage.putFile(
-        storagePath,
+      final ref = _storage.ref('$storagePrefix/$fileName');
+      final task = await ref.putFile(
         file,
-        metadata: SettableMetadata(contentType: 'image/jpeg'),
-      ));
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      urls.add(await task.ref.getDownloadURL());
     }
     return urls;
   }

@@ -23,7 +23,6 @@ import 'connectivity_service.dart';
 import '../utils/fleet_constants.dart';
 import '../utils/fleet_soft_delete.dart';
 import '../utils/persona_audit.dart';
-import 'app_storage.dart';
 import 'sync_service.dart';
 
 /// Thrown when a status change loses a race — the issue moved on while this
@@ -66,6 +65,7 @@ class FleetService {
   }
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'africa-south1');
 
@@ -659,12 +659,12 @@ class FleetService {
     _guardWrite();
     final file = File(localPath);
     final fileName = '${const Uuid().v4()}.jpg';
-    final path = '$fleetRef/photos/$fileName';
-    return AppStorage.putFile(
-      path,
+    final ref = _storage.ref('$fleetRef/photos/$fileName');
+    final task = await ref.putFile(
       file,
-      metadata: SettableMetadata(contentType: 'image/jpeg'),
+      SettableMetadata(contentType: 'image/jpeg'),
     );
+    return await task.ref.getDownloadURL();
   }
 
   // ---------------------------------------------------------------------------

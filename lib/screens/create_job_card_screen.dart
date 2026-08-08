@@ -12,7 +12,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/job_card.dart';
-import '../services/app_storage.dart';
 import '../services/connectivity_service.dart';
 import '../services/firestore_service.dart';
 import '../main.dart' show currentEmployee, realEmployee;
@@ -417,6 +416,7 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
   Future<List<Map<String, dynamic>>> _uploadPhotos() async {
     if (photos.isEmpty) return [];
     final List<Map<String, dynamic>> uploaded = [];
+    final storage = FirebaseStorage.instance;
     const uuid = Uuid();
     final folderUuid = uuid.v4();
 
@@ -443,13 +443,12 @@ class _CreateJobCardScreenState extends State<CreateJobCardScreen>
           );
         }
 
-        final storagePath =
-            'job_cards/$folderUuid/photos/photo_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final downloadUrl = await AppStorage.putFile(
-          storagePath,
-          file,
-          metadata: SettableMetadata(contentType: 'image/jpeg'),
-        );
+        final storageRef = storage
+            .ref()
+            .child('job_cards/$folderUuid/photos/photo_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        await storageRef.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+        final downloadUrl = await storageRef.getDownloadURL();
 
         uploaded.add({
           'url': downloadUrl,

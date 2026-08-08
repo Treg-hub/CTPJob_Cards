@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, debugPrint;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +11,6 @@ import 'package:uuid/uuid.dart';
 import '../constants/collections.dart';
 import '../models/sync_queue_item.dart';
 import '../utils/waste_collection_marker.dart';
-import 'app_storage.dart';
 import 'connectivity_service.dart';
 
 /// One Hive queue row for [SyncService.addAllToQueue].
@@ -757,7 +757,9 @@ class SyncService {
     }
     final storagePath = '$storageFolder/photos/$fileName';
 
-    final downloadUrl = await AppStorage.putFile(storagePath, file);
+    final ref = FirebaseStorage.instance.ref().child(storagePath);
+    final snapshot = await ref.putFile(file);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
 
     // Patch the target document (load or item) - arrayUnion is idempotent-friendly
 
@@ -865,7 +867,9 @@ class SyncService {
     final fileName = 'signature_${item.id}.png';
     final storagePath = 'waste_loads/$loadId/signature/$fileName';
 
-    final downloadUrl = await AppStorage.putData(storagePath, bytes);
+    final ref = FirebaseStorage.instance.ref().child(storagePath);
+    final snapshot = await ref.putData(bytes);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
 
     // Patch only the signature URL (status/complete/actor fields handled by parallel wasteLoads update queue or direct call)
     await FirebaseFirestore.instance
@@ -1428,8 +1432,9 @@ class SyncService {
         ? 'fleet_work_records/$targetId'
         : 'fleet_issues/$targetId';
     final fileName = '${const Uuid().v4()}.jpg';
-    final path = '$storageFolder/photos/$fileName';
-    final downloadUrl = await AppStorage.putFile(path, file);
+    final ref = FirebaseStorage.instance.ref('$storageFolder/photos/$fileName');
+    final snapshot = await ref.putFile(file);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
 
     await FirebaseFirestore.instance.collection(collection).doc(targetId).update({
       'photos': FieldValue.arrayUnion([downloadUrl]),
@@ -1473,8 +1478,10 @@ class SyncService {
       final file = File(path);
       if (file.existsSync()) {
         final fileName = '${const Uuid().v4()}.jpg';
-        final storagePath = 'fleet_work_records/$recordId/photos/$fileName';
-        final url = await AppStorage.putFile(storagePath, file);
+        final ref = FirebaseStorage.instance
+            .ref('fleet_work_records/$recordId/photos/$fileName');
+        final snapshot = await ref.putFile(file);
+        final url = await snapshot.ref.getDownloadURL();
         await FirebaseFirestore.instance
             .collection(Collections.fleetWorkRecords)
             .doc(recordId)
@@ -1607,7 +1614,9 @@ class SyncService {
 
     final fileName = '${const Uuid().v4()}.jpg';
     final storagePath = 'security_entries/$entryId/$fileName';
-    final downloadUrl = await AppStorage.putFile(storagePath, file);
+    final ref = FirebaseStorage.instance.ref().child(storagePath);
+    final snapshot = await ref.putFile(file);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
 
     await FirebaseFirestore.instance
         .collection(Collections.securityEntries)
@@ -1646,8 +1655,10 @@ class SyncService {
       final file = File(path);
       if (file.existsSync()) {
         final fileName = '${const Uuid().v4()}.jpg';
-        final storagePath = 'security_entries/$entryId/$fileName';
-        final url = await AppStorage.putFile(storagePath, file);
+        final ref = FirebaseStorage.instance
+            .ref('security_entries/$entryId/$fileName');
+        final snapshot = await ref.putFile(file);
+        final url = await snapshot.ref.getDownloadURL();
         await FirebaseFirestore.instance
             .collection(Collections.securityEntries)
             .doc(entryId)
