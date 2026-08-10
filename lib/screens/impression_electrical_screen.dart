@@ -4,9 +4,12 @@ import 'package:intl/intl.dart';
 import '../main.dart' show currentEmployee;
 import '../services/impression_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/impression_format.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/role.dart' as role_utils;
+import '../widgets/impression_actor_picker.dart';
 import '../widgets/impression_app_bar.dart';
+import '../widgets/impression_pass_fail_toggle.dart';
 import '../widgets/impression_tip_banner.dart';
 
 class ImpressionElectricalScreen extends StatefulWidget {
@@ -35,13 +38,17 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
   final _insL2 = TextEditingController();
   final _insR2 = TextEditingController();
   final _comments = TextEditingController();
-  bool _pass = true;
-  String _esa = 'full';
+  /// Defaults to FAIL so operators must deliberately choose PASS.
+  /// PASS = full ESA (any unit); FAIL = yellow units only. No separate ESA dropdown.
+  bool _pass = false;
   bool _saving = false;
   DateTime _effectiveAt = DateTime.now();
+  String? _performedByClock = currentEmployee?.clockNo;
 
   bool get _canEditTimestamp =>
       role_utils.canEditImpressionTimestamp(currentEmployee);
+  bool get _canEditActor =>
+      role_utils.canEditImpressionActors(currentEmployee);
 
   @override
   void dispose() {
@@ -61,14 +68,33 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
   }
 
   Future<void> _submit() async {
+    if (!_pass) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Save as electrical FAIL?'),
+          content: const Text(
+            'This assembly will still go to spares, but may only be installed on yellow (no-ESA) units. Continue?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Go back')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save FAIL · yellow only')),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
     setState(() => _saving = true);
     try {
+      // PASS → any unit (full ESA). FAIL → yellow units only. No extra choice.
+      final esa = _pass ? 'full' : 'yellow_only';
       await ImpressionService.instance.completeElectrical(
         cycleId: widget.cycleId,
         pass: _pass,
-        esaSuitability: _pass ? _esa : 'unsuitable',
+        esaSuitability: esa,
         electrical: {
           'pass': _pass,
+          'esaSuitability': esa,
           'conductiveResistanceCold': {
             'row1': {'left': _condL1.text, 'centre': _condC1.text, 'right': _condR1.text},
             'row2': {'left': _condL2.text, 'centre': _condC2.text, 'right': _condR2.text},
@@ -80,9 +106,18 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
           'comments': _comments.text.trim(),
         },
         effectiveAt: _effectiveAt,
+        performedByClock: _canEditActor ? _performedByClock : null,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Electrical saved')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _pass
+                ? 'Electrical PASS · OK for any unit — ready as spare'
+                : 'Electrical FAIL · yellow units only — added to spares',
+          ),
+        ),
+      );
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -142,6 +177,7 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
   Widget build(BuildContext context) {
     final d = widget.cycleData;
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final press = ImpressionFormat.press(d['pressId']?.toString());
     return Scaffold(
       appBar: ImpressionAppBar(
         title: 'Electrical · ${d['cycleNo'] ?? widget.cycleId}',
@@ -167,66 +203,108 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
           else
             const SizedBox(height: 8),
           Text(
-            '${d['shaftNo']} / ${d['sleeveId']} · ${d['pressId']}',
+            'Shaft ${d['shaftNo'] ?? '—'}  ·  Sleeve ${d['sleeveId'] ?? '—'}  ·  $press',
             style: TextStyle(color: onSurface, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 12),
+          if (_canEditActor) ...[
+            const SizedBox(height: 12),
+            ImpressionActorPicker(
+              role: ImpressionActorRole.electrical,
+              selectedClock: _performedByClock,
+              onChanged: (e) => setState(() => _performedByClock = e?.clockNo),
+              label: 'Tested by (electrical)',
+            ),
+          ],
+          const SizedBox(height: 8),
           Text(
             'Conductive resistance cold (mΩ)',
             style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Two rows — left / centre / right',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
           const SizedBox(height: 6),
-          _row3(_condL1, _condC1, _condR1, 'L', 'C', 'R'),
+          _row3(_condL1, _condC1, _condR1, 'Left', 'Centre', 'Right'),
           const SizedBox(height: 6),
-          _row3(_condL2, _condC2, _condR2, 'L', 'C', 'R'),
-          const SizedBox(height: 12),
+          _row3(_condL2, _condC2, _condR2, 'Left', 'Centre', 'Right'),
+          const SizedBox(height: 16),
           Text(
             'Insulation resistance (GΩ)',
             style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Two rows — left / right',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
           const SizedBox(height: 6),
-          _row2(_insL1, _insR1, 'L', 'R'),
+          _row2(_insL1, _insR1, 'Left', 'Right'),
           const SizedBox(height: 6),
-          _row2(_insL2, _insR2, 'L', 'R'),
+          _row2(_insL2, _insR2, 'Left', 'Right'),
           const SizedBox(height: 12),
           TextField(
             controller: _comments,
             style: TextStyle(color: onSurface),
-            decoration: const InputDecoration(labelText: 'Comments', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Comments',
+              hintText: 'e.g. Passed · tested by…',
+              border: OutlineInputBorder(),
+            ),
             maxLines: 2,
           ),
-          SwitchListTile(
-            title: Text('Pass', style: TextStyle(color: onSurface)),
-            value: _pass,
-            activeThumbColor: kBrandOrange,
-            onChanged: (v) => setState(() {
-              _pass = v;
-              if (!v) _esa = 'unsuitable';
-            }),
-            contentPadding: EdgeInsets.zero,
+          ImpressionPassFailToggle(
+            pass: _pass,
+            title: 'Electrical result',
+            failHint:
+                'FAIL = yellow (no-ESA) units only. Spare can still be used on those units.',
+            passHint: 'PASS = acceptable for any unit on this press.',
+            onChanged: (v) => setState(() => _pass = v),
           ),
-          if (_pass)
-            DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: _esa,
-              items: const [
-                DropdownMenuItem(value: 'full', child: Text('Full ESA OK')),
-                DropdownMenuItem(value: 'yellow_only', child: Text('Yellow units only')),
-              ],
-              onChanged: (v) => setState(() => _esa = v ?? 'full'),
-              decoration: const InputDecoration(
-                labelText: 'ESA suitability',
-                border: OutlineInputBorder(),
+          Card(
+            color: _pass
+                ? const Color(0xFF2E7D32).withValues(alpha: 0.12)
+                : Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.35),
+            child: ListTile(
+              leading: Icon(
+                _pass ? Icons.check_circle_outline : Icons.warning_amber,
+                color: _pass ? const Color(0xFF2E7D32) : null,
+              ),
+              title: Text(_pass ? 'OK for any unit' : 'Yellow units only'),
+              subtitle: Text(
+                _pass
+                    ? 'Full ESA — can install on any unit of this press.'
+                    : 'Install only on yellow (no-ESA) units. No override to ESA units.',
               ),
             ),
-          const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 12),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: kBrandOrange,
-              foregroundColor: Colors.black,
+              backgroundColor: _pass ? kBrandOrange : Theme.of(context).colorScheme.error,
+              foregroundColor: _pass ? Colors.black : Colors.white,
+              minimumSize: const Size.fromHeight(48),
             ),
             onPressed: _saving ? null : _submit,
-            child: const Text('Submit electrical'),
+            child: _saving
+                ? SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _pass ? Colors.black : Colors.white,
+                    ),
+                  )
+                : Text(
+                    _pass
+                        ? 'Submit electrical PASS'
+                        : 'Save FAIL · yellow units only',
+                  ),
           ),
         ],
       ),
@@ -235,19 +313,19 @@ class _ImpressionElectricalScreenState extends State<ImpressionElectricalScreen>
 
   Widget _row3(TextEditingController a, TextEditingController b, TextEditingController c, String la, String lb, String lc) {
     return Row(children: [
-      Expanded(child: TextField(controller: a, decoration: InputDecoration(labelText: la, border: const OutlineInputBorder(), isDense: true))),
+      Expanded(child: TextField(controller: a, decoration: InputDecoration(labelText: la, border: const OutlineInputBorder(), isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true))),
       const SizedBox(width: 6),
-      Expanded(child: TextField(controller: b, decoration: InputDecoration(labelText: lb, border: const OutlineInputBorder(), isDense: true))),
+      Expanded(child: TextField(controller: b, decoration: InputDecoration(labelText: lb, border: const OutlineInputBorder(), isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true))),
       const SizedBox(width: 6),
-      Expanded(child: TextField(controller: c, decoration: InputDecoration(labelText: lc, border: const OutlineInputBorder(), isDense: true))),
+      Expanded(child: TextField(controller: c, decoration: InputDecoration(labelText: lc, border: const OutlineInputBorder(), isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true))),
     ]);
   }
 
   Widget _row2(TextEditingController a, TextEditingController b, String la, String lb) {
     return Row(children: [
-      Expanded(child: TextField(controller: a, decoration: InputDecoration(labelText: la, border: const OutlineInputBorder(), isDense: true))),
+      Expanded(child: TextField(controller: a, decoration: InputDecoration(labelText: la, border: const OutlineInputBorder(), isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true))),
       const SizedBox(width: 6),
-      Expanded(child: TextField(controller: b, decoration: InputDecoration(labelText: lb, border: const OutlineInputBorder(), isDense: true))),
+      Expanded(child: TextField(controller: b, decoration: InputDecoration(labelText: lb, border: const OutlineInputBorder(), isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true))),
     ]);
   }
 }

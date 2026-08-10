@@ -449,11 +449,9 @@ bool isImpressionMechanical(Employee? employee, [ImpressionSettings? settings]) 
   final dept = employee.department.trim().toLowerCase();
   final pos = employee.position.trim().toLowerCase();
   if (dept != workshopDepartment.toLowerCase()) return false;
-  if (pos == 'mechanic') return true;
-  if (pos.contains('manager') &&
-      (pos.contains('mechanic') || pos.contains('mechanical'))) {
-    return true;
-  }
+  // Mechanics + mechanical managers + generic workshop managers (not electrical-only).
+  if (pos == 'mechanic' || pos.contains('mechanic')) return true;
+  if (pos.contains('manager') && !pos.contains('electric')) return true;
   return false;
 }
 
@@ -466,9 +464,25 @@ bool isImpressionElectrical(Employee? employee, [ImpressionSettings? settings]) 
   final dept = employee.department.trim().toLowerCase();
   final pos = employee.position.trim().toLowerCase();
   if (dept != workshopDepartment.toLowerCase()) return false;
-  if (pos == 'electrician' || pos.contains('electrician')) return true;
-  if (pos.contains('manager') && pos.contains('electric')) return true;
+  if (pos == 'electrician' || pos.contains('electrician') || pos.contains('electric')) {
+    return true;
+  }
+  // Generic workshop managers get electrical too; pure mechanical managers do not.
+  if (pos.contains('manager') &&
+      !pos.contains('mechanic') &&
+      !pos.contains('mechanical')) {
+    return true;
+  }
   return false;
+}
+
+/// **Managers + dual isAdmin only** may attribute work to another employee.
+/// Floor staff (mechanic, electrician, No1/No2/Foreman without manager) always
+/// record as themselves — never show a performed-by picker.
+bool canEditImpressionActors(Employee? employee) {
+  if (employee == null) return false;
+  if (isAdmin(employee)) return true;
+  return isImpressionManagerOffSiteAllowed(employee);
 }
 
 bool isImpressionPressroom(Employee? employee, [ImpressionSettings? settings]) {

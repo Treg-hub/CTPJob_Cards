@@ -87,6 +87,8 @@ class ImpressionService {
     String? clientRef,
     /// Manager/admin only — ISO-8601; CF ignores for non-managers.
     DateTime? effectiveAt,
+    /// Manager/admin only — who actually did the mechanical work.
+    String? performedByClock,
   }) {
     return _call('startImpressionBuild', {
       'shaftNo': shaftNo,
@@ -98,6 +100,7 @@ class ImpressionService {
       if (mechanical != null) 'mechanical': mechanical,
       if (clientRef != null) 'client_ref': clientRef,
       if (effectiveAt != null) 'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+      if (performedByClock != null) 'performedByClock': performedByClock,
     });
   }
 
@@ -108,6 +111,8 @@ class ImpressionService {
     Map<String, dynamic>? electrical,
     /// Manager/admin only — ISO-8601; CF ignores for non-managers.
     DateTime? effectiveAt,
+    /// Manager/admin only — who actually did the electrical test.
+    String? performedByClock,
   }) {
     return _call('completeImpressionElectrical', {
       'cycleId': cycleId,
@@ -115,6 +120,7 @@ class ImpressionService {
       'esaSuitability': esaSuitability,
       if (electrical != null) 'electrical': electrical,
       if (effectiveAt != null) 'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+      if (performedByClock != null) 'performedByClock': performedByClock,
     });
   }
 
@@ -125,6 +131,8 @@ class ImpressionService {
     double? revsMillions,
     String? comments,
     List<String>? photoPaths,
+    /// Manager/admin only — who removed the roller.
+    String? performedByClock,
   }) {
     return _call('removeImpressionRoller', {
       'pressId': pressId,
@@ -133,6 +141,7 @@ class ImpressionService {
       if (revsMillions != null) 'revsMillions': revsMillions,
       if (comments != null) 'comments': comments,
       if (photoPaths != null) 'photoPaths': photoPaths,
+      if (performedByClock != null) 'performedByClock': performedByClock,
     });
   }
 
@@ -144,6 +153,8 @@ class ImpressionService {
     String? yellowOnlyNote,
     /// Manager/admin only — ISO-8601; CF ignores for non-managers.
     DateTime? effectiveAt,
+    /// Manager/admin only — who installed the roller.
+    String? performedByClock,
   }) {
     return _call('installImpressionRoller', {
       'pressId': pressId,
@@ -152,6 +163,28 @@ class ImpressionService {
       'yellowOnlyOverride': yellowOnlyOverride,
       if (yellowOnlyNote != null) 'yellowOnlyNote': yellowOnlyNote,
       if (effectiveAt != null) 'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+      if (performedByClock != null) 'performedByClock': performedByClock,
+    });
+  }
+
+  /// Manager/admin: correct historical who-did-what on a cycle.
+  Future<Map<String, dynamic>> updateCycleActors({
+    required String cycleId,
+    String? mechanicalByClock,
+    String? electricalByClock,
+    String? installByClock,
+    String? removeByClock,
+    String? stripByClock,
+    String? sendOutByClock,
+  }) {
+    return _call('updateImpressionCycleActors', {
+      'cycleId': cycleId,
+      if (mechanicalByClock != null) 'mechanicalByClock': mechanicalByClock,
+      if (electricalByClock != null) 'electricalByClock': electricalByClock,
+      if (installByClock != null) 'installByClock': installByClock,
+      if (removeByClock != null) 'removeByClock': removeByClock,
+      if (stripByClock != null) 'stripByClock': stripByClock,
+      if (sendOutByClock != null) 'sendOutByClock': sendOutByClock,
     });
   }
 
@@ -160,12 +193,15 @@ class ImpressionService {
     required String sleeveDisposition,
     String? sendOutType,
     String? notes,
+    /// Manager/admin only — who stripped.
+    String? performedByClock,
   }) {
     return _call('stripImpressionRoller', {
       'cycleId': cycleId,
       'sleeveDisposition': sleeveDisposition,
       if (sendOutType != null) 'sendOutType': sendOutType,
       if (notes != null) 'notes': notes,
+      if (performedByClock != null) 'performedByClock': performedByClock,
     });
   }
 
@@ -174,12 +210,15 @@ class ImpressionService {
     required String vendor,
     required String sendOutType,
     String? eta,
+    /// Manager/admin only — who sent out.
+    String? performedByClock,
   }) {
     return _call('sendOutImpressionSleeve', {
       'cycleId': cycleId,
       'vendor': vendor,
       'sendOutType': sendOutType,
       if (eta != null) 'eta': eta,
+      if (performedByClock != null) 'performedByClock': performedByClock,
     });
   }
 
