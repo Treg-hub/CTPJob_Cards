@@ -9,10 +9,12 @@ import '../models/employee.dart';
 import '../models/impression_settings.dart';
 import '../services/impression_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/impression_format.dart';
 import '../utils/ink_pickers.dart';
 import '../utils/presence_gating.dart';
 import '../utils/role.dart';
 import '../widgets/ctp_app_bar.dart';
+import '../widgets/impression_actor_picker.dart';
 import '../widgets/impression_app_bar.dart';
 import '../widgets/impression_tip_banner.dart';
 import 'impression_cycle_detail_screen.dart';
@@ -105,6 +107,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
   bool get _canMech => isImpressionMechanical(_emp, _settings);
   bool get _canElec => isImpressionElectrical(_emp, _settings);
   bool get _canPress => isImpressionPressroom(_emp, _settings);
+  bool get _canEditActor => canEditImpressionActors(_emp);
 
   Future<void> _refreshCompliance() async {
     final dateKey = ImpressionService.todayDateKey();
@@ -154,15 +157,24 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
   }
 
   String get _nextStep {
+    final press = ImpressionFormat.press(_pressId);
     if (_canPress && _awaitingCount > 0) {
-      return 'Install $_awaitingCount unit(s) awaiting roller';
+      return 'Install rollers on $_awaitingCount unit(s) waiting on $press';
     }
-    if (_canPress && _irDoneToday != true) return 'Complete daily IR for $_pressId';
-    if (_canPress && _esaDoneToday != true) return 'Complete daily ESA for $_pressId';
-    if (_canMech && _stripCount > 0) return 'Strip $_stripCount roller(s)';
-    if (_canElec && _elecCount > 0) return 'Test $_elecCount assembly(ies)';
-    if (_canMech) return 'Start a new build when sleeves return';
-    return 'All clear — review map and queues';
+    if (_canPress && _irDoneToday != true) {
+      return 'Complete today’s IR inspection on $press';
+    }
+    if (_canPress && _esaDoneToday != true) {
+      return 'Complete today’s ESA inspection on $press';
+    }
+    if (_canMech && _stripCount > 0) {
+      return 'Strip $_stripCount removed roller(s)';
+    }
+    if (_canElec && _elecCount > 0) {
+      return 'Electrical test: $_elecCount assembly(ies) waiting';
+    }
+    if (_canMech) return 'Start a new mechanical build when you have a shaft + sleeve';
+    return 'All clear — check the map and queues if needed';
   }
 
   @override
@@ -242,7 +254,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     child: ListTile(
                       leading: Icon(Icons.warning_amber, color: scheme.error),
                       title: Text(
-                        'IR outstanding today · ${presses[_pressId]?.label ?? _pressId}',
+                        'Daily IR not done today · ${presses[_pressId]?.label ?? ImpressionFormat.press(_pressId)}',
                         style: TextStyle(color: onSurface),
                       ),
                       trailing: _canPress
@@ -256,7 +268,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     child: ListTile(
                       leading: Icon(Icons.warning_amber, color: scheme.error),
                       title: Text(
-                        'ESA outstanding today · ${presses[_pressId]?.label ?? _pressId}',
+                        'Daily ESA not done today · ${presses[_pressId]?.label ?? ImpressionFormat.press(_pressId)}',
                         style: TextStyle(color: onSurface),
                       ),
                       trailing: _canPress
@@ -265,8 +277,9 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     ),
                   ),
                 const SizedBox(height: 12),
+                // ── Shared status (all roles see) ──
                 _section(
-                  title: 'Press map',
+                  title: 'On press now (everyone)',
                   child: _PressMap(
                     pressId: _pressId,
                     canAct: _canPress,
@@ -275,7 +288,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                   ),
                 ),
                 _section(
-                  title: 'Spares (this press)',
+                  title: 'Spares ready (everyone)',
                   child: _SpareList(
                     pressId: _pressId,
                     canInstall: _canPress,
@@ -283,21 +296,68 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     onOpen: _openCycle,
                   ),
                 ),
+                _section(
+                  title: 'Outstanding work (everyone)',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _outstandingLine(
+                        'Electrical tests waiting',
+                        _elecCount,
+                        highlight: _canElec && _elecCount > 0,
+                      ),
+                      _outstandingLine(
+                        'Strip after remove',
+                        _stripCount,
+                        highlight: _canMech && _stripCount > 0,
+                      ),
+                      _outstandingLine(
+                        'Units awaiting install',
+                        _awaitingCount,
+                        highlight: _canPress && _awaitingCount > 0,
+                      ),
+                      _outstandingLine(
+                        'Daily IR today',
+                        _irDoneToday == true ? 0 : 1,
+                        highlight: _canPress && _irDoneToday != true,
+                        zeroLabel: 'Done',
+                        oneLabel: 'Not done yet',
+                      ),
+                      _outstandingLine(
+                        'Daily ESA today',
+                        _esaDoneToday == true ? 0 : 1,
+                        highlight: _canPress && _esaDoneToday != true,
+                        zeroLabel: 'Done',
+                        oneLabel: 'Not done yet',
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Pressroom actions ──
+                _deptHeader('Pressroom', enabled: _canPress),
                 _tile(
                   title: 'Daily IR inspection',
-                  subtitle: _irDoneToday == true ? 'Done today' : 'Required when press running',
+                  subtitle: _irDoneToday == true
+                      ? 'Done today'
+                      : 'Pressures while the press is running',
                   enabled: _canPress,
                   onTap: _openDailyIr,
                 ),
                 _tile(
                   title: 'Daily ESA inspection',
-                  subtitle: _esaDoneToday == true ? 'Done today' : 'Yellow units skipped',
+                  subtitle: _esaDoneToday == true
+                      ? 'Done today'
+                      : 'Charge/discharge condition (yellow units skipped)',
                   enabled: _canPress,
                   onTap: _openDailyEsa,
                 ),
+
+                // ── Mechanical actions ──
+                _deptHeader('Mechanical (Workshop)', enabled: _canMech),
                 _tile(
-                  title: 'Start build (Mechanical)',
-                  subtitle: 'Shaft + sleeve/UNN + control sheet',
+                  title: 'Start mechanical build',
+                  subtitle: 'Shaft + sleeve (or UNN) + control sheet measurements',
                   enabled: _canMech,
                   onTap: () async {
                     await Navigator.push(
@@ -310,9 +370,87 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                   },
                 ),
                 _section(
-                  title: 'Electrical queue',
+                  title: 'Strip after remove',
+                  child: _CycleQueue(
+                    state: 'removed_pending_strip',
+                    emptyLabel: 'No rollers waiting to strip',
+                    enabled: _canMech,
+                    actionLabel: 'Strip',
+                    onAction: _canMech ? _showStrip : null,
+                    onOpen: _openCycle,
+                  ),
+                ),
+                _section(
+                  title: 'Ready to send out',
+                  child: _CycleQueue(
+                    state: 'sleeve_send_out_pending',
+                    emptyLabel: 'No sleeves ready to send',
+                    enabled: _canMech,
+                    actionLabel: 'Send out',
+                    onAction: _canMech ? _showSendOut : null,
+                    onOpen: _openCycle,
+                  ),
+                ),
+                _section(
+                  title: 'At vendor',
+                  child: _CycleQueue(
+                    state: 'sleeve_at_vendor',
+                    emptyLabel: 'No sleeves at vendor',
+                    enabled: _canMech,
+                    actionLabel: 'Receive',
+                    onAction: _canMech
+                        ? (id, _) async {
+                            await ImpressionService.instance.receive(cycleId: id);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Sleeve received — start a new build when ready'),
+                              ),
+                            );
+                            _refreshCounts();
+                          }
+                        : null,
+                    onOpen: _openCycle,
+                  ),
+                ),
+                _section(
+                  title: 'Received — ready to rebuild',
+                  child: _CycleQueue(
+                    state: 'sleeve_received',
+                    emptyLabel: 'No received sleeves waiting',
+                    enabled: _canMech,
+                    actionLabel: 'Rebuild',
+                    onAction: _canMech
+                        ? (id, data) async {
+                            final shaft = data['shaftNo']?.toString() ?? '';
+                            final sleeve = data['sleeveId']?.toString() ?? '';
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ImpressionStartBuildScreen(pressId: _pressId),
+                              ),
+                            );
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Enter shaft $shaft and sleeve $sleeve on the build form',
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
+                    onOpen: _openCycle,
+                  ),
+                ),
+
+                // ── Electrical actions ──
+                _deptHeader('Electrical (Workshop)', enabled: _canElec),
+                _section(
+                  title: 'Waiting for electrical test',
                   child: _CycleQueue(
                     state: 'awaiting_electrical',
+                    emptyLabel: 'Nothing waiting for electrical',
                     enabled: _canElec,
                     actionLabel: 'Test',
                     onAction: _canElec
@@ -333,9 +471,10 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                   ),
                 ),
                 _section(
-                  title: 'Electrical failed (quarantine)',
+                  title: 'Legacy electrical quarantine',
                   child: _CycleQueue(
                     state: 'electrical_fail',
+                    emptyLabel: 'None (new fails go to spares · yellow only)',
                     enabled: _canElec || _canMech,
                     actionLabel: 'Retest',
                     onAction: _canElec
@@ -349,70 +488,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                                 ),
                               ),
                             );
-                          }
-                        : null,
-                    onOpen: _openCycle,
-                  ),
-                ),
-                _section(
-                  title: 'Strip queue',
-                  child: _CycleQueue(
-                    state: 'removed_pending_strip',
-                    enabled: _canMech,
-                    actionLabel: 'Strip',
-                    onAction: _canMech ? _showStrip : null,
-                    onOpen: _openCycle,
-                  ),
-                ),
-                _section(
-                  title: 'Send-out pending',
-                  child: _CycleQueue(
-                    state: 'sleeve_send_out_pending',
-                    enabled: _canMech,
-                    actionLabel: 'Send out',
-                    onAction: _canMech ? _showSendOut : null,
-                    onOpen: _openCycle,
-                  ),
-                ),
-                _section(
-                  title: 'At vendor',
-                  child: _CycleQueue(
-                    state: 'sleeve_at_vendor',
-                    enabled: _canMech,
-                    actionLabel: 'Receive',
-                    onAction: _canMech
-                        ? (id, _) async {
-                            await ImpressionService.instance.receive(cycleId: id);
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Received — start new build')),
-                            );
                             _refreshCounts();
-                          }
-                        : null,
-                    onOpen: _openCycle,
-                  ),
-                ),
-                _section(
-                  title: 'Received sleeves (rebuild)',
-                  child: _CycleQueue(
-                    state: 'sleeve_received',
-                    enabled: _canMech,
-                    actionLabel: 'Rebuild',
-                    onAction: _canMech
-                        ? (id, data) async {
-                            final shaft = data['shaftNo']?.toString() ?? '';
-                            final sleeve = data['sleeveId']?.toString() ?? '';
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ImpressionStartBuildScreen(pressId: _pressId),
-                              ),
-                            );
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Use shaft $shaft / sleeve $sleeve')),
-                            );
                           }
                         : null,
                     onOpen: _openCycle,
@@ -447,6 +523,66 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
     );
   }
 
+  Widget _deptHeader(String title, {required bool enabled}) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+      child: Row(
+        children: [
+          Icon(
+            enabled ? Icons.build_circle_outlined : Icons.lock_outline,
+            size: 18,
+            color: enabled ? kBrandOrange : onSurface.withValues(alpha: 0.45),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              enabled ? title : '$title · view only (not your department)',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: onSurface.withValues(alpha: enabled ? 1 : 0.55),
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _outstandingLine(
+    String label,
+    int count, {
+    bool highlight = false,
+    String? zeroLabel,
+    String? oneLabel,
+  }) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final value = count == 0
+        ? (zeroLabel ?? 'None')
+        : (count == 1 && oneLabel != null ? oneLabel : '$count');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(
+            highlight ? Icons.priority_high : Icons.check_circle_outline,
+            size: 18,
+            color: highlight ? Theme.of(context).colorScheme.error : const Color(0xFF2E7D32),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label, style: TextStyle(color: onSurface))),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: highlight ? Theme.of(context).colorScheme.error : onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _tile({
     required String title,
     required String subtitle,
@@ -460,7 +596,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
         enabled: enabled,
         title: Text(title, style: TextStyle(color: onSurface)),
         subtitle: Text(
-          enabled ? subtitle : '$subtitle · not your step',
+          enabled ? subtitle : '$subtitle · not your department’s step',
           style: TextStyle(color: onSurface.withValues(alpha: 0.75)),
         ),
         trailing: Icon(
@@ -517,14 +653,18 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('Unit $unitNo', style: Theme.of(context).textTheme.titleLarge),
-              Text('$state · ${data['shaftNo'] ?? "—"} / ${data['sleeveId'] ?? "—"}'),
-              if (data['overMaxStreak'] != null)
-                Text('Over-max streak: ${data['overMaxStreak']}'),
+              Text(
+                '${ImpressionFormat.slotState(state)} · '
+                'Shaft ${data['shaftNo'] ?? "—"} / Sleeve ${data['sleeveId'] ?? "—"}',
+              ),
+              if (data['overMaxStreak'] != null && (data['overMaxStreak'] as num) > 0)
+                Text('Pressure over-max streak: ${data['overMaxStreak']} day(s)'),
               const SizedBox(height: 12),
               if (data['cycleId'] != null)
                 ListTile(
                   leading: const Icon(Icons.history),
-                  title: const Text('Life review'),
+                  title: const Text('View cycle life'),
+                  subtitle: const Text('Mechanical, electrical, install history'),
                   onTap: () {
                     Navigator.pop(ctx);
                     _openCycle(data['cycleId'] as String);
@@ -544,7 +684,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     Navigator.pop(ctx);
                     _pickSpareAndInstall(unitNo);
                   },
-                  child: const Text('Install from spares'),
+                  child: const Text('Install spare on this unit'),
                 ),
             ],
           ),
@@ -559,40 +699,60 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
     String reason = _settings.removalReasons.isNotEmpty
         ? _settings.removalReasons.first
         : 'planned_change';
+    var performedBy = currentEmployee?.clockNo;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remove roller'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: unitCtrl,
-              decoration: const InputDecoration(labelText: 'Unit 1–8'),
-              keyboardType: TextInputType.number,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Remove roller from press'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_canEditActor)
+                  ImpressionActorPicker(
+                    role: ImpressionActorRole.pressroom,
+                    selectedClock: performedBy,
+                    onChanged: (e) => setLocal(() => performedBy = e?.clockNo),
+                    label: 'Removed by',
+                  ),
+                TextField(
+                  controller: unitCtrl,
+                  decoration: const InputDecoration(labelText: 'Unit (1–8)'),
+                  keyboardType: TextInputType.number,
+                ),
+                DropdownButtonFormField<String>(
+                  // ignore: deprecated_member_use
+                  value: reason,
+                  items: (_settings.removalReasons.isEmpty
+                          ? ['planned_change', 'other']
+                          : _settings.removalReasons)
+                      .map(
+                        (r) => DropdownMenuItem(
+                          value: r,
+                          child: Text(ImpressionFormat.removalReason(r)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setLocal(() => reason = v ?? reason),
+                  decoration: const InputDecoration(labelText: 'Reason for removal'),
+                ),
+                TextField(
+                  controller: revsCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Revolutions (millions) *',
+                    helperText: 'Required — e.g. 12.5',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
             ),
-            DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: reason,
-              items: (_settings.removalReasons.isEmpty
-                      ? ['planned_change', 'other']
-                      : _settings.removalReasons)
-                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                  .toList(),
-              onChanged: (v) => reason = v ?? reason,
-              decoration: const InputDecoration(labelText: 'Reason'),
-            ),
-            TextField(
-              controller: revsCtrl,
-              decoration: const InputDecoration(labelText: 'Revolutions (millions) *'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
-        ],
       ),
     );
     if (ok != true || !mounted) return;
@@ -610,16 +770,23 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
         unitNo: unit,
         reason: reason,
         revsMillions: revs,
+        performedByClock: _canEditActor ? performedBy : null,
       );
       if (!mounted) return;
       final install = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Removed'),
-          content: const Text('Install a replacement from spares now?'),
+          title: const Text('Roller removed'),
+          content: const Text('Install a replacement spare on this unit now?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Continue other work')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Install now')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Install now'),
+            ),
           ],
         ),
       );
@@ -707,6 +874,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
     final canEditTs = canEditImpressionTimestamp(currentEmployee);
     final unitCtrl = TextEditingController(text: '$unitNo');
     var effectiveAt = DateTime.now();
+    var performedBy = currentEmployee?.clockNo;
     final confirmed = await showDialog<_InstallConfirmResult>(
       context: context,
       builder: (ctx) {
@@ -755,6 +923,13 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                       )
                     else
                       const SizedBox(height: 12),
+                    if (_canEditActor)
+                      ImpressionActorPicker(
+                        role: ImpressionActorRole.pressroom,
+                        selectedClock: performedBy,
+                        onChanged: (e) => setLocal(() => performedBy = e?.clockNo),
+                        label: 'Installed by',
+                      ),
                     InputDecorator(
                       decoration: const InputDecoration(
                         labelText: 'Shaft (Roller No.)',
@@ -809,7 +984,11 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
                     if (u == null || u < 1 || u > 8) return;
                     Navigator.pop(
                       ctx,
-                      _InstallConfirmResult(unitNo: u, effectiveAt: effectiveAt),
+                      _InstallConfirmResult(
+                        unitNo: u,
+                        effectiveAt: effectiveAt,
+                        performedByClock: performedBy,
+                      ),
                     );
                   },
                   child: const Text('Install'),
@@ -825,16 +1004,49 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
 
     var override = false;
     String? note;
-    if (esa == 'yellow_only') {
-      final pressCfg = _settings.presses[_pressId];
-      final noEsa = pressCfg?.noEsaUnits ?? [];
+    // Load cycle to detect hard yellow-only (electrical FAIL).
+    var hardYellowOnly = false;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(Collections.impressionCycles)
+          .doc(cycleId)
+          .get();
+      final elec = snap.data()?['electrical'];
+      hardYellowOnly = elec is Map && elec['pass'] == false;
+    } catch (_) {}
+    if (!mounted) return;
+
+    final pressCfg = _settings.presses[_pressId];
+    final noEsa = pressCfg?.noEsaUnits.isNotEmpty == true
+        ? pressCfg!.noEsaUnits
+        : (_pressId == 'wifag' ? const [1, 5] : const [4, 5]);
+
+    if (hardYellowOnly || esa == 'yellow_only') {
       if (!noEsa.contains(confirmed.unitNo)) {
+        if (hardYellowOnly) {
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Yellow units only'),
+              content: Text(
+                'Electrical FAIL — this roller may only go on yellow units: ${noEsa.join(', ')}.\n\n'
+                'Unit ${confirmed.unitNo} is not a yellow unit. Pick a yellow unit or another spare.',
+              ),
+              actions: [
+                FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+              ],
+            ),
+          );
+          return;
+        }
         final go = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Yellow-only recommendation'),
-            content: const Text(
-              'Poor conductivity — recommended for yellow (no ESA) units only. Override?',
+            title: const Text('Yellow-only spare'),
+            content: Text(
+              'Recommended for yellow (no ESA) units only (${noEsa.join(', ')}).\n\n'
+              'Override and install on unit ${confirmed.unitNo}?',
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -855,6 +1067,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
         yellowOnlyOverride: override,
         yellowOnlyNote: note,
         effectiveAt: confirmed.effectiveAt,
+        performedByClock: _canEditActor ? confirmed.performedByClock : null,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Installed')));
@@ -871,36 +1084,53 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
   Future<void> _showStrip(String cycleId, Map<String, dynamic> data) async {
     var disposition = 'send_out';
     var sendType = 'recover';
+    var performedBy = currentEmployee?.clockNo;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
           title: const Text('Strip'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                // ignore: deprecated_member_use
-                value: disposition,
-                items: const [
-                  DropdownMenuItem(value: 'send_out', child: Text('Send out sleeve')),
-                  DropdownMenuItem(value: 'scrap', child: Text('Scrap')),
-                  DropdownMenuItem(value: 'retest', child: Text('Retest electrical')),
-                ],
-                onChanged: (v) => setLocal(() => disposition = v ?? disposition),
-              ),
-              if (disposition == 'send_out')
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_canEditActor)
+                  ImpressionActorPicker(
+                    role: ImpressionActorRole.mechanical,
+                    selectedClock: performedBy,
+                    onChanged: (e) => setLocal(() => performedBy = e?.clockNo),
+                    label: 'Stripped by',
+                  ),
                 DropdownButtonFormField<String>(
                   // ignore: deprecated_member_use
-                  value: sendType,
-                  items: (_settings.sendOutTypes.isEmpty
-                          ? ['recover', 'regrind']
-                          : _settings.sendOutTypes)
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (v) => setLocal(() => sendType = v ?? sendType),
+                  value: disposition,
+                  decoration: const InputDecoration(labelText: 'What next for the sleeve?'),
+                  items: const [
+                    DropdownMenuItem(value: 'send_out', child: Text('Send out to vendor')),
+                    DropdownMenuItem(value: 'scrap', child: Text('Scrap')),
+                    DropdownMenuItem(value: 'retest', child: Text('Retest electrical')),
+                  ],
+                  onChanged: (v) => setLocal(() => disposition = v ?? disposition),
                 ),
-            ],
+                if (disposition == 'send_out')
+                  DropdownButtonFormField<String>(
+                    // ignore: deprecated_member_use
+                    value: sendType,
+                    decoration: const InputDecoration(labelText: 'Send-out type'),
+                    items: (_settings.sendOutTypes.isEmpty
+                            ? ['recover', 'regrind']
+                            : _settings.sendOutTypes)
+                        .map(
+                          (t) => DropdownMenuItem(
+                            value: t,
+                            child: Text(ImpressionFormat.sendOutType(t)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setLocal(() => sendType = v ?? sendType),
+                  ),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -915,6 +1145,7 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
         cycleId: cycleId,
         sleeveDisposition: disposition,
         sendOutType: sendType,
+        performedByClock: _canEditActor ? performedBy : null,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stripped')));
@@ -931,11 +1162,43 @@ class _ImpressionHubScreenState extends State<ImpressionHubScreen>
     final vendor = _settings.vendors.isNotEmpty
         ? _settings.vendors.first
         : 'Rubber Engineering';
+    var performedBy = currentEmployee?.clockNo;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Send out sleeve'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Vendor: $vendor'),
+                const SizedBox(height: 8),
+                if (_canEditActor)
+                  ImpressionActorPicker(
+                    role: ImpressionActorRole.mechanical,
+                    selectedClock: performedBy,
+                    onChanged: (e) => setLocal(() => performedBy = e?.clockNo),
+                    label: 'Sent out by',
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send out')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
     try {
       await ImpressionService.instance.sendOut(
         cycleId: cycleId,
         vendor: vendor,
         sendOutType: 'recover',
+        performedByClock: _canEditActor ? performedBy : null,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sent out')));
@@ -997,11 +1260,13 @@ class _PressMap extends StatelessWidget {
                   ),
                 ),
               ),
-              title: Text('U$unit · $shaft / $sleeve'),
+              title: Text('Unit $unit · $shaft / $sleeve'),
               subtitle: Text(
                 awaiting
-                    ? 'Awaiting install — tap to install'
-                    : 'Installed · streak $streak${m['lastIrOverMax'] == true ? ' · last IR over max' : ''}',
+                    ? 'Waiting for install — tap to fit a spare'
+                    : 'On press'
+                        '${(streak is num && streak > 0) ? ' · over-max $streak day(s)' : ''}'
+                        '${m['lastIrOverMax'] == true ? ' · last IR over max' : ''}',
               ),
               trailing: m['cycleId'] != null
                   ? IconButton(
@@ -1036,18 +1301,26 @@ class _SpareList extends StatelessWidget {
       stream: ImpressionService.instance.watchCyclesByState('spare_ready', pressId: pressId),
       builder: (context, snap) {
         final docs = snap.data ?? [];
-        if (docs.isEmpty) return const Text('No spares ready');
+        if (docs.isEmpty) {
+          return const Text('No spares ready for this press yet.');
+        }
         return Column(
           children: docs.map((d) {
             final m = d.data();
             final esa = m['esaSuitability']?.toString();
+            final elecFail = m['electrical'] is Map && m['electrical']['pass'] == false;
+            final yellowNote = elecFail
+                ? 'Electrical FAIL · yellow units only'
+                : esa == 'yellow_only'
+                    ? 'Yellow units only'
+                    : ImpressionFormat.esa(esa);
             return ListTile(
               dense: true,
               onTap: () => onOpen(d.id),
-              title: Text('${m['shaftNo']} / ${m['sleeveId']}'),
+              title: Text('Shaft ${m['shaftNo']} / Sleeve ${m['sleeveId']}'),
               subtitle: Text(
-                '${m['cycleNo']} · ESA $esa'
-                '${esa == 'yellow_only' ? ' ⚠ yellow only' : ''}',
+                '${m['cycleNo']} · $yellowNote'
+                '${esa == 'yellow_only' || elecFail ? ' ⚠' : ''}',
               ),
               trailing: canInstall && onInstall != null
                   ? TextButton(
@@ -1065,6 +1338,7 @@ class _SpareList extends StatelessWidget {
 
 class _CycleQueue extends StatelessWidget {
   final String state;
+  final String emptyLabel;
   final bool enabled;
   final String actionLabel;
   final Future<void> Function(String id, Map<String, dynamic> data)? onAction;
@@ -1072,6 +1346,7 @@ class _CycleQueue extends StatelessWidget {
 
   const _CycleQueue({
     required this.state,
+    this.emptyLabel = 'Nothing here',
     required this.enabled,
     required this.actionLabel,
     this.onAction,
@@ -1084,15 +1359,18 @@ class _CycleQueue extends StatelessWidget {
       stream: ImpressionService.instance.watchCyclesByState(state),
       builder: (context, snap) {
         final docs = snap.data ?? [];
-        if (docs.isEmpty) return Text('Empty ($state)');
+        if (docs.isEmpty) return Text(emptyLabel);
         return Column(
           children: docs.map((d) {
             final m = d.data();
+            final press = ImpressionFormat.press(m['pressId']?.toString());
             return ListTile(
               dense: true,
               onTap: () => onOpen(d.id),
-              title: Text('${m['cycleNo'] ?? d.id} · ${m['shaftNo']} / ${m['sleeveId']}'),
-              subtitle: Text('${m['pressId'] ?? ''}'),
+              title: Text(
+                '${m['cycleNo'] ?? d.id} · ${m['shaftNo']} / ${m['sleeveId']}',
+              ),
+              subtitle: Text(press),
               trailing: enabled && onAction != null
                   ? TextButton(
                       onPressed: () => onAction!(d.id, m),
@@ -1110,9 +1388,11 @@ class _CycleQueue extends StatelessWidget {
 class _InstallConfirmResult {
   final int unitNo;
   final DateTime effectiveAt;
+  final String? performedByClock;
 
   const _InstallConfirmResult({
     required this.unitNo,
     required this.effectiveAt,
+    this.performedByClock,
   });
 }

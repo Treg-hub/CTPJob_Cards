@@ -20,24 +20,27 @@ class ImpressionTipBanner extends StatefulWidget {
 
   static const Map<String, String> tips = {
     'hub':
-        'Pick your press tab (remembered next time). Map shows what is in each unit. '
-        'Your role only enables your steps — grey actions are for another department. '
-        'Remove a roller first, then install a spare. Daily IR and ESA when the press is running.',
+        'Everyone sees what is on press, spares, and outstanding work. '
+        'Only your department can action its section (Mechanical / Electrical / Pressroom). '
+        'Managers and admin can pick who did the work when recording history, and adjust date/time. '
+        'Always remove a roller before installing a spare.',
     'daily_ir':
-        'Fill pressures for every occupied unit. Units awaiting install are skipped. '
-        'If a reading is over max, note the action (drop pressure / plan change). '
-        'Use condition chips; pick Other for free text.',
+        'Enter pressures for every unit that has a roller. Empty units are skipped. '
+        'If a reading is over max, record the action (drop pressure or plan a change). '
+        'Use the condition chips; choose Other for free text.',
     'daily_esa':
-        'Yellow units have no ESA. Clean charge/discharge (or pressure roller on Badenia), '
-        'then pick condition chips. Other opens free text.',
+        'Yellow units have no ESA — they are skipped. Clean charge and discharge '
+        '(or pressure roller on Badenia), then pick a condition. Other opens free text.',
     'start_build':
-        'Shaft number is required. Sleeve can be unnumbered (system UNN). '
-        'Complete mechanical measurements, then Pass so Electrical can test.',
+        'Shaft (roller) number is required. Tick unnumbered if the sleeve has no number yet. '
+        '“Built by / bearings fitted by” is who built the roller (paper field). '
+        'Result defaults to FAIL — tap PASS only when mechanical is good so Electrical can test.',
     'electrical':
-        'Enter conductive and insulation readings. Pass + Full ESA, or Yellow only if conductivity is weak. '
-        'Fail keeps the assembly out of spares until rework.',
+        'Enter cold conductive (mΩ) and insulation (GΩ) readings. '
+        'PASS = OK for any unit. FAIL = yellow (no-ESA) units only. No extra ESA dropdown.',
     'cycle_detail':
-        'Full life of this build: mechanical, electrical, install/remove, events, and daily checks linked to this cycle.',
+        'Life of this roller build: who did mechanical and electrical, install and remove, '
+        'a simple timeline, and daily IR/ESA while it was on the press.',
   };
 
   @override
