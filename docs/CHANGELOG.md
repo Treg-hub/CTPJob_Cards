@@ -6,6 +6,19 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-10 — 2.3.0+206 — Imp Rollers build and install
+
+### What you will notice
+
+- **Imp Rollers** start build and electrical use a clear **PASS / FAIL** choice (starts on FAIL so you must choose PASS).
+- Electrical **PASS** means the roller can go on **any unit**; **FAIL** means **yellow units only**.
+- **Built by / bearings fitted by** is who built the roller on the control sheet.
+- Cycle life shows plain dates and names (no technical timestamp text).
+- Everyone can see what is on the press, spares, and outstanding work; only your department can complete its steps.
+- Managers and admins can set date/time and who did the work when recording history.
+
+---
+
 ## 2026-08-08 — 2.3.0+205 — Photo upload (standard path)
 
 ### What you will notice
