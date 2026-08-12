@@ -109,7 +109,13 @@ Append-only log of user-visible changes.
       expect(md, contains('build 131'));
     });
 
-    test('parseBuildFromHeading supports paren and bare forms', () {
+    test('parseBuildFromHeading supports plus, paren, and bare forms', () {
+      expect(
+        WhatsNewService.parseBuildFromHeading(
+          '## 2026-08-12 — 2.3.0+207 — Press Live work codes',
+        ),
+        207,
+      );
       expect(
         WhatsNewService.parseBuildFromHeading('## x (build 121) — y'),
         121,
@@ -119,6 +125,53 @@ Append-only log of user-visible changes.
         99,
       );
       expect(WhatsNewService.parseBuildFromHeading('## No number here'), isNull);
+    });
+
+    test('rolls up X.Y.Z+N headings when skipping many builds', () {
+      const plusLog = '''
+## 2026-08-12 — 2.3.0+207 — Newest
+
+- New
+
+---
+
+## 2026-08-10 — 2.3.0+206 — Mid
+
+- Mid
+
+---
+
+## 2026-08-08 — 2.3.0+197 — Older skip
+
+- Skip
+
+---
+
+## 2026-08-01 — 2.3.0+196 — Already seen
+
+- Old
+''';
+      final md = WhatsNewService.extractEntriesSince(plusLog, 196);
+      expect(md, contains('+207'));
+      expect(md, contains('+206'));
+      expect(md, contains('+197'));
+      expect(md, isNot(contains('+196')));
+    });
+
+    test('caps roll-up and points to full changelog', () {
+      final buf = StringBuffer();
+      for (var n = 210; n >= 200; n--) {
+        buf.writeln('## 2026-08-01 — 2.3.0+$n — Build $n\n\n- note $n\n\n---\n');
+      }
+      final md = WhatsNewService.extractEntriesSince(
+        buf.toString(),
+        199,
+        maxEntries: 5,
+      );
+      expect(md, contains('+210'));
+      expect(md, contains('+206'));
+      expect(md, isNot(contains('+205')));
+      expect(md, contains('Full changelog'));
     });
   });
 }

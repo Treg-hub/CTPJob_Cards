@@ -15,9 +15,9 @@ import '../widgets/whats_new_sheet.dart';
 /// the changelog before building".
 ///
 /// When the user jumps multiple builds, entries whose headings include
-/// `(build N)` with N greater than [lastSeenWhatsNewBuild] are rolled up
-/// (capped). Headings without a build number only appear as the single latest
-/// entry when no numbered newer sections exist.
+/// `X.Y.Z+N` or `(build N)` with N greater than [lastSeenWhatsNewBuild] are
+/// rolled up (capped). Headings without a build number only appear as the
+/// single latest entry when no numbered newer sections exist.
 ///
 /// Tracking: `lastSeenWhatsNewBuild` in SharedPreferences.
 /// - Fresh installs are stamped during permissions onboarding
@@ -31,7 +31,9 @@ class WhatsNewService {
 
   static const String lastSeenBuildKey = 'lastSeenWhatsNewBuild';
   static const String changelogAssetPath = 'docs/CHANGELOG.md';
-  static const int maxRollupEntries = 5;
+  /// Enough to cover a phone that skipped many factory builds; older notes
+  /// stay in Settings → Documentation → Changelog.
+  static const int maxRollupEntries = 20;
 
   /// Stamps the current build as seen without showing anything. Called when
   /// permissions onboarding completes so first-time users skip the sheet.
@@ -109,8 +111,8 @@ class WhatsNewService {
   /// Roll-up of changelog sections newer than [lastSeenBuild].
   ///
   /// - [lastSeenBuild] null → latest entry only (first show of this feature).
-  /// - Headings with `(build N)` or `build N` where N > lastSeen are included
-  ///   (newest first), capped at [maxEntries].
+  /// - Headings with `2.3.0+207`, `(build N)`, or `build N` where N > lastSeen
+  ///   are included (newest first), capped at [maxEntries].
   /// - If no numbered entries qualify, falls back to the latest entry.
   static String? extractEntriesSince(
     String changelog,
@@ -138,11 +140,16 @@ class WhatsNewService {
     }
 
     final capped = newer.take(maxEntries).toList();
-    return capped.map((e) => e.body).join('\n\n---\n\n');
+    final body = capped.map((e) => e.body).join('\n\n---\n\n');
+    if (newer.length <= maxEntries) return body;
+    return '$body\n\n_Showing the ${capped.length} most recent updates. '
+        'Tap **Full changelog** for everything else._';
   }
 
-  /// Parses `(build 121)` or bare `build 121` from a `## ` heading line.
+  /// Parses `2.3.0+207`, `(build 121)`, or bare `build 121` from a `## ` heading.
   static int? parseBuildFromHeading(String headingLine) {
+    final plus = RegExp(r'\d+\.\d+\.\d+\+(\d+)').firstMatch(headingLine);
+    if (plus != null) return int.tryParse(plus.group(1)!);
     final paren = RegExp(r'\(build\s+(\d+)\)', caseSensitive: false)
         .firstMatch(headingLine);
     if (paren != null) return int.tryParse(paren.group(1)!);

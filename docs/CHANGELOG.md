@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-12 — 2.3.0+207 — Press Live work codes
+
+### What you will notice
+
+- On **Press Live**, tap a press to see **work codes** and time on the **current job** (Make Ready, Solvent Recovery, and the rest from the live screen).
+- The code running now is marked **(now)**.
+- Expanded row also shows **Best** speed next to Act / Avg / Plan.
+- After an update, **What's changed** lists every release you skipped, not only the newest one.
+
+---
+
 ## 2026-08-10 — 2.3.0+206 — Imp Rollers build and install
 
 ### What you will notice

@@ -6,8 +6,8 @@ import '../theme/app_theme.dart';
 import '../utils/doc_catalog.dart';
 import '../utils/screen_insets.dart';
 
-/// Bottom sheet shown once after an app update with the newest changelog
-/// entry. See WhatsNewService for when it fires.
+/// Bottom sheet shown once after an app update with changelog entries since
+/// the last seen build. See WhatsNewService for when it fires.
 Future<void> showWhatsNewSheet(
   BuildContext context, {
   required String markdown,
