@@ -340,7 +340,7 @@ class _PressCard extends StatelessWidget {
                         ),
                         child: Text(
                           statusLabel,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11,
@@ -429,6 +429,12 @@ class _PressCard extends StatelessWidget {
                     ),
                     Expanded(
                       child: _Metric(
+                        label: 'Best',
+                        value: fmtNum(data['bestSpeed']),
+                      ),
+                    ),
+                    Expanded(
+                      child: _Metric(
                         label: 'ME',
                         value: '${fmtNum(data['mePct'])}%',
                       ),
@@ -449,12 +455,68 @@ class _PressCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 11, color: muted),
                 ),
+                ..._jobCodeLogSection(data, duration, muted, onSurface),
               ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  List<Widget> _jobCodeLogSection(
+    Map<String, dynamic> data,
+    String Function(dynamic) duration,
+    Color muted,
+    Color onSurface,
+  ) {
+    final log = data['jobCodeLog'];
+    if (log is! Map) return const [];
+    final raw = log['segments'];
+    if (raw is! List || raw.isEmpty) return const [];
+    final rows = <Widget>[
+      const SizedBox(height: 10),
+      Text(
+        'This job - work codes',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: onSurface,
+        ),
+      ),
+      const SizedBox(height: 4),
+    ];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final code = (item['code'] ?? '').toString();
+      if (code.isEmpty) continue;
+      final open = item['open'] == true;
+      final dur = duration(item['durationMin']);
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  open ? '$code (now)' : code,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: open ? FontWeight.w600 : FontWeight.w400,
+                    color: onSurface,
+                  ),
+                ),
+              ),
+              Text(
+                dur.isEmpty ? '—' : dur,
+                style: TextStyle(fontSize: 12, color: muted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return rows;
   }
 }
 
