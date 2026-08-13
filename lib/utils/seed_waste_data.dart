@@ -26,37 +26,47 @@ Future<void> seedWasteData() async {
     await db.collection(Collections.wasteContractors).add(c);
   }
 
-  // Waste Types (per spec §5)
+  // Waste Types — flat production catalogue (no Paper Waste / Copper Waste parents)
   final types = [
-    {
-      'mainType': 'Copper Waste',
-      'subtypes': ['Nuggets', 'Rods'],
-      'quantityLabels': {},
-    },
-    {
-      'mainType': 'Paper Waste',
-      'subtypes': ['Reelends', 'Slab Waste', 'Reels'],
-      'quantityLabels': {
-        'Reelends': 'Quantity (reels)',
-        'Reels': 'Quantity (reels)',
-        'Slab Waste': 'Quantity (pallets)',
-      },
-    },
-    {'mainType': 'Open Bin', 'subtypes': [], 'quantityLabels': {}},
-    {
-      'mainType': 'Compactor Bin',
-      'subtypes': [],
-      'quantityLabels': {'default': 'Quantity (bins)'},
-      'noSiteWeight': true,
-    },
-    {'mainType': 'Scrap Metal', 'subtypes': [], 'quantityLabels': {}},
+    {'mainType': 'Reelends', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (reels)'}},
+    {'mainType': 'Slab Waste', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (pallets)'}},
+    {'mainType': 'Scrap Reels', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (reels)'}},
+    {'mainType': 'Copper Nuggets', 'subtypes': [], 'quantityLabels': {}},
+    {'mainType': 'Copper Rods', 'subtypes': [], 'quantityLabels': {}},
     {
       'mainType': 'Copper Skins',
       'subtypes': [],
       'quantityLabels': {'default': 'Quantity (bins)'},
       'isFixedTareDualBin': true,
     },
+    {'mainType': 'Open Bin', 'subtypes': [], 'quantityLabels': {}, 'noSiteWeight': true},
+    {'mainType': 'Open Bin(Board K4)', 'subtypes': [], 'quantityLabels': {}, 'noSiteWeight': true},
+    {
+      'mainType': 'Compactor Bin',
+      'subtypes': [],
+      'quantityLabels': {'default': 'Quantity (bins)'},
+      'noSiteWeight': true,
+    },
+    {
+      'mainType': 'Scrap Metal',
+      'subtypes': ['Scrap'],
+      'quantityLabels': {},
+      'noSiteWeight': true,
+    },
     {'mainType': 'IBC Bins', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (bins)'}, 'isQuantityOnly': true},
+    {'mainType': 'Waste Bin', 'subtypes': [], 'quantityLabels': {'default': 'Quantity (bins)'}, 'isQuantityOnly': true},
+    {
+      'mainType': 'Used Oil',
+      'subtypes': [],
+      'quantityLabels': {'default': 'Litres'},
+      'isQuantityOnly': true,
+    },
+    {
+      'mainType': 'Contaminated Oil',
+      'subtypes': [],
+      'quantityLabels': {'default': 'Litres'},
+      'isQuantityOnly': true,
+    },
   ];
 
   for (final t in types) {
