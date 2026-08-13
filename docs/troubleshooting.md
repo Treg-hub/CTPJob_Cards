@@ -46,9 +46,10 @@ This guide covers the most common symptoms users hit in production and the faste
 ### Check, in order
 
 1. **Settings → Check for update** — shows channel, force flag, URL, current vs latest build.
-2. **URL should be Hosting**, not App Distribution:  
-   `https://ctp-job-cards-landing.web.app/releases/latest.apk`  
-   On **build 147+**, Admin/Firestore is read first; RC only fills empty fields. Older builds could keep a stale RC App Distribution URL — upgrade or set Shared download URL and Save. Diagnostic shows **Config source** (`firestore:…` vs `remote_config`).
+2. **Download URL** is usually **Cloud Storage**, not a Hosting file path:  
+   `https://firebasestorage.googleapis.com/v0/b/ctp-job-cards.firebasestorage.app/o/releases%2Flatest.apk?alt=media`  
+   Pilot channel may use `pilot.apk` in the same folder. Landing pages may still redirect `/releases/latest.apk` to Storage.  
+   On **build 147+**, Admin/Firestore is read first; Remote Config only fills empty fields. Older builds could keep a stale App Distribution URL — upgrade or set Shared download URL and Save. Diagnostic shows **Config source** (`firestore:…` vs `remote_config`).
 3. Confirm Admin published the right channel and selected the right departments/people (list pickers, not free text).
 4. Confirm your `employees.department` matches a selected department (e.g. `Ink Factory`).
 5. Confirm Default build is **not** equal to a Departments force build if you only meant to force one dept (old APKs only read Default).

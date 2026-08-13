@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +36,8 @@ class _WasteScheduleLoadScreenState
   List<WasteType> _wasteTypes = [];
   Contractor? _selectedContractor;
   final Set<String> _selectedTypeIds = {};
+  StreamSubscription<List<Contractor>>? _contractorsSub;
+  StreamSubscription<List<WasteType>>? _typesSub;
   DateTime _scheduledFor = DateTime.now();
   bool _isLoading = true;
   bool _isSaving = false;
@@ -57,43 +60,56 @@ class _WasteScheduleLoadScreenState
 
   @override
   void dispose() {
+    _contractorsSub?.cancel();
+    _typesSub?.cancel();
     _notesController.dispose();
     _paperDocController.dispose();
     super.dispose();
   }
 
   Future<void> _loadData() async {
-    const timeout = Duration(seconds: 10);
-    try {
-      final contractors = await _wasteService
-          .watchContractors()
-          .first
-          .timeout(timeout, onTimeout: () => []);
-      final types = await _wasteService
-          .watchWasteTypes()
-          .first
-          .timeout(timeout, onTimeout: () => []);
-      if (mounted) {
+    _contractorsSub?.cancel();
+    _typesSub?.cancel();
+    _contractorsSub = _wasteService.watchContractors().listen(
+      (contractors) {
+        if (!mounted) return;
         setState(() {
           _contractors = contractors;
+          _isLoading = false;
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load contractors — check connection')),
+        );
+      },
+    );
+    _typesSub = _wasteService.watchWasteTypes().listen(
+      (types) {
+        if (!mounted) return;
+        setState(() {
           _wasteTypes = types;
           _isLoading = false;
         });
-      }
-    } catch (e) {
-      if (mounted) {
+      },
+      onError: (_) {
+        if (!mounted) return;
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data — check connection')),
-        );
-      }
-    }
+      },
+    );
   }
 
   List<WasteType> get _availableTypes {
     final c = _selectedContractor;
     if (c == null || c.wasteTypeIds.isEmpty) return const [];
-    return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+    final list = _wasteTypes
+        .where((t) => c.wasteTypeIds.contains(t.id))
+        .toList()
+      ..sort((a, b) =>
+          a.chipLabel.toLowerCase().compareTo(b.chipLabel.toLowerCase()));
+    return list;
   }
 
   List<WasteType> get _selectedTypes => _availableTypes
@@ -117,14 +133,6 @@ class _WasteScheduleLoadScreenState
       _showStockSection = false;
       _onSiteStock = [];
       _selectedStockIds.clear();
-      if (contractor != null) {
-        // Auto-select contractor types except dual-bin (Copper Skins must be alone).
-        for (final type in _availableTypes) {
-          if (type.id != null && !type.isFixedTareDualBin) {
-            _selectedTypeIds.add(type.id!);
-          }
-        }
-      }
     });
     _refreshStockForSelection();
   }
@@ -368,7 +376,7 @@ class _WasteScheduleLoadScreenState
                   Text('Waste Types *', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 4),
                   Text(
-                    'Select one or more types for this load. On-site stock is filtered to your selection.',
+                    'Tap the types on this truck. Nothing is selected until you tap — Mondi Board / K4 is listed separately from Open Bin.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -395,7 +403,7 @@ class _WasteScheduleLoadScreenState
                       final selected =
                           type.id != null && _selectedTypeIds.contains(type.id);
                       return FilterChip(
-                        label: Text(type.mainType),
+                        label: Text(type.chipLabel),
                         selected: selected,
                         onSelected: (_) => _toggleWasteType(type),
                       );

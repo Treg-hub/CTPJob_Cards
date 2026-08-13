@@ -96,4 +96,4 @@ Include what you heard, saw, or felt, what the machine was doing, and whether it
 
 ## Need access?
 
-If you do not see the **Fleet** tab or **Report Problem** button, ask an admin to add your **department** under **Fleet Settings → Reporter departments**.
+If you do not see the **Fleet** tile on Home or the **Report Problem** button, ask an admin to add your **department** under Pulse **Fleet Settings → Reporter departments**.

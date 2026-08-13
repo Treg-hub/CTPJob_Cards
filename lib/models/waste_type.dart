@@ -31,6 +31,15 @@ class WasteType {
     this.isFixedTareDualBin = false,
   });
 
+  /// Chip / picker label. Catalogue id stays [mainType] for matching loads.
+  String get chipLabel {
+    final compact = mainType.toLowerCase().replaceAll(RegExp(r'[\s()/_-]+'), '');
+    if (compact.contains('boardk4') || compact.contains('k4bin')) {
+      return 'Board / K4 bin';
+    }
+    return mainType;
+  }
+
   /// Returns the dynamic quantity label for a given subtype.
   /// For quantity-only types, returns the 'default' label or "Quantity (units)".
   String quantityLabelFor(String subtype) {

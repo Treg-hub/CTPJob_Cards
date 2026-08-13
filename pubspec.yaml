@@ -93,6 +93,9 @@ flutter:
     - docs/fleet_cost_manager_guide.md
     - docs/security_guard_guide.md
     - docs/security_manager_mobile_guide.md
+    - docs/lurgi_operator_guide.md
+    - docs/impression_rollers_guide.md
+    - docs/ink_operator_guide.md
     # Pressroom short packs (in-app only; Settings/Home → Press Manuals)
     - docs/press_manuals/aurora_arl_safety.md
     - docs/press_manuals/aurora_cps_quick.md

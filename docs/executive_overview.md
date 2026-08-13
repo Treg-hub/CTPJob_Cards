@@ -4,7 +4,7 @@
 
 ## What the System Is
 
-The CTP Job Cards platform is the **central CTP mobile app** (still branded Job Cards) for plant operations. Its core is real-time digital maintenance management — structured job cards, notifications, and escalation — and it also hosts integrated modules: **Waste Recovery**, **Site Security**, **Fleet Maintenance**, and **Ink Factory** field capture. Manager desks for weighbridge, gate-log reporting, and board KPIs live on **CTP Pulse**.
+The CTP Job Cards platform is the **central CTP mobile app** (still branded Job Cards) for plant operations. Its core is real-time digital maintenance management — structured job cards, notifications, and escalation — and it also hosts integrated modules: **Waste Recovery**, **Site Security**, **Fleet Maintenance**, **Ink Factory**, **Lurgi**, and **Impression Rollers**. Manager desks live on **CTP Pulse**.
 
 The platform is built on Google Firebase — enterprise-grade cloud infrastructure — and is designed to be always available, offline-capable, and scalable without requiring any on-site IT infrastructure.
 
@@ -43,11 +43,13 @@ The CTP Job Cards system addresses all of these by digitising the entire process
 
 | Module | Mobile (this app) | Manager desk (CTP Pulse) |
 |--------|-------------------|---------------------------|
-| **Job Cards** | Create, assign, escalate, close | Read-only KPIs and list (`/jobs`) |
-| **Waste Recovery** | Schedule, collect, stock link (guards/managers) | Weighbridge, cost review, reports |
-| **Site Security** | Scan in/out, company cars, visitors | Gate log, on-site, exports, deny list |
-| **Fleet Maintenance** | Reporters + mechanics (zero cost UI on floor) | Cost managers link spend, reports |
-| **Ink Factory** | Operators record production / meters | Managers: ledger, shipments, month-end |
+| **Job Cards** | Create, assign, escalate, close | KPIs and list (`/jobs`); Press Live history; AI Intelligence (granted) |
+| **Waste Recovery** | Schedule, collect, stock link (guards/managers) | Weighbridge, cost review (cash/account), reports |
+| **Site Security** | Scan in/out, company cars, visitors, On Site list | **Operations** (on site + paired gate log), exports, deny list |
+| **Fleet Maintenance** | Reporters + mechanics (no cost UI on the phone) | Costing, reports, settings |
+| **Ink Factory** | Operators: tanks, receive, IBC, production, DN | Ledger, shipments, month-end, costing |
+| **Lurgi** | Morning meters, chemicals, recycling, Daily Readings | Period KPIs, soft-void |
+| **Impression Rollers** | Map, remove/install, build, IR/ESA | Compliance desk + settings |
 
 ---
 

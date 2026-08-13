@@ -550,7 +550,9 @@ Manual visitor entry without a vehicle disc.
 
 `lib/screens/security_on_site_screen.dart` — **Roles:** Security Guard, Security Manager, Admin
 
-Live list of vehicles currently on site (operational view; managers also use Pulse Operations hub).
+Live list of people and vehicles currently on site. Cards show **three lines**; **tap a card to expand** details (one open at a time). **Scan out** / **Sign out** sit on the collapsed row and in the expanded view. Force sign-out remains on the ⋮ menu.
+
+Managers also use **CTP Pulse → Security → Operations** (on-site list + paired gate log on one page).
 
 ### Add Company Car Cost
 

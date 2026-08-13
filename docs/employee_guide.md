@@ -343,7 +343,15 @@ Your choice is remembered and applies every time you open the app. The orange CT
 
 ---
 
+## Other modules on the same phone
+
+Depending on your department and grants, Home may also show tiles or tabs for **Fleet**, **Ink Factory**, **Lurgi**, **Impression Rollers**, **Press Live**, **Press Manuals**, **Waste Recovery**, or **Site Security**. Each has its own guide under Settings → Documentation when that module applies to you.
+
+---
+
 ## The Future: AI-Assisted Maintenance
+
+Pulse already has an **AI Intelligence** desk for granted admins (`/jobs/ai-intelligence`). Floor staff still capture job cards as today — those records feed later tools.
 
 ### Predictive Maintenance
 

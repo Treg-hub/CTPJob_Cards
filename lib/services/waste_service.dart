@@ -589,6 +589,7 @@ class WasteService {
       data: serialized,
       documentId: loadId,
     );
+    _triggerBackgroundWasteSync();
     return loadId;
   }
 

@@ -14,6 +14,9 @@ import '../utils/role.dart';
 ///   Manager, Admin). Gated on the same condition as the Fleet tab.
 /// - `requiresSecurity` — Site Security users only (guard, manager, Admin).
 ///   Further narrowed per-doc in `docsForUser` (guard vs manager guides).
+/// - `requiresLurgi` — Lurgi department (or admin).
+/// - `requiresImpression` — Impression Rollers users when the module is on.
+/// - `requiresInk` — Ink Factory department (or admin).
 /// - `roles` — Set of base [UserRole]s allowed to see this doc.
 class DocEntry {
   final String id;
@@ -38,6 +41,15 @@ class DocEntry {
   /// guides; guard-only vs manager-only docs are filtered in `docsForUser`.
   final bool requiresSecurity;
 
+  /// When true, only Lurgi department staff (or admin) can see this doc.
+  final bool requiresLurgi;
+
+  /// When true, only Impression Rollers users (module enabled) can see this doc.
+  final bool requiresImpression;
+
+  /// When true, only Ink Factory staff (or admin) can see this doc.
+  final bool requiresInk;
+
   const DocEntry({
     required this.id,
     required this.title,
@@ -48,6 +60,9 @@ class DocEntry {
     this.requiresWaste = false,
     this.requiresFleet = false,
     this.requiresSecurity = false,
+    this.requiresLurgi = false,
+    this.requiresImpression = false,
+    this.requiresInk = false,
   });
 
   String get assetPath => 'docs/$id.md';

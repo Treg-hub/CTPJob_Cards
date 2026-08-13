@@ -72,6 +72,44 @@ void main() {
       expect(ids, isNot(contains('security_guard_guide')));
       expect(ids, isNot(contains('security_manager_mobile_guide')));
       expect(ids, contains('employee_guide'));
+      expect(ids, isNot(contains('lurgi_operator_guide')));
+      expect(ids, isNot(contains('impression_rollers_guide')));
+      expect(ids, isNot(contains('ink_operator_guide')));
+    });
+  });
+
+  group('docsForUser — Lurgi and Impression', () {
+    test('Lurgi operator sees Lurgi guide', () {
+      final lurgi = _employee(position: 'Operator', department: 'Lurgi');
+      final ids = _docIds(docsForUser(lurgi, fleetOn, wasteOn, securityOn));
+      expect(ids, contains('lurgi_operator_guide'));
+    });
+
+    test('Pressroom No1 sees Impression guide', () {
+      final no1 = _employee(position: 'No1', department: 'Pressroom');
+      final ids = _docIds(docsForUser(no1, fleetOn, wasteOn, securityOn));
+      expect(ids, contains('impression_rollers_guide'));
+    });
+  });
+
+  group('docsForUser — Ink Factory', () {
+    test('Ink operator sees Ink guide', () {
+      final ink = _employee(position: 'Operator', department: 'Ink Factory');
+      final ids = _docIds(docsForUser(ink, fleetOn, wasteOn, securityOn));
+      expect(ids, contains('ink_operator_guide'));
+    });
+  });
+
+  group('docsForUser — Fleet cost manager', () {
+    test('sees cost manager guide when clock is on the list', () {
+      final mgr = _employee(position: 'Manager', department: 'Stores');
+      const fleetCost = FleetSettings(
+        fleetEnabled: true,
+        costManagerClockNos: ['100'],
+      );
+      final ids = _docIds(docsForUser(mgr, fleetCost, wasteOn, securityOn));
+      expect(ids, contains('fleet_cost_manager_guide'));
+      expect(ids, isNot(contains('fleet_mechanic_guide')));
     });
   });
 }

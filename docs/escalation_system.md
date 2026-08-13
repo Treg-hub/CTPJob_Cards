@@ -33,6 +33,8 @@ The escalation has **4 stages**, each with its own:
 - **Enabled flag** — can be turned on/off independently
 - **Recipients per job type** — different people can be notified for mechanical vs electrical jobs
 
+Cadence is the **same 24 hours a day**. There is no overnight quiet period and Stage 1 is not daytime-only.
+
 | Stage | Timing | Purpose |
 |-------|--------|---------|
 | Stage 1 | 5 min | First escalation — onsite managers + foremen |
@@ -347,6 +349,8 @@ No code change needed.
 > **4. Don't combine multiple null-equality filters with a range filter in one Firestore query.** The current escalation query uses *one* null filter (`notifiedAtStageN == null`) plus a range on `createdAt`, which works fine with the correct composite index. Adding a second null filter (e.g. `assignedClockNos == null`) silently returns 0 results — filter that one in JavaScript after the fetch instead.
 
 > **5. Composite indexes don't include documents with missing fields.** If a job card was created before `notifiedAtStage3` / `notifiedAtStage4` existed on the model, those documents won't appear in the Stage 3 / Stage 4 queries. Run **Admin → Reset Escalation Stamps** once after deploying field additions — it explicitly writes `null` on every open non-excluded job, putting them all in the index.
+
+> **6. Escalation density does not change overnight.** `escalateNotifications` uses the same Stage 1 / 5-minute cadence 24/7. Do not introduce quiet hours.
 
 ---
 

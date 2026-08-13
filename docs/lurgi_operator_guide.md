@@ -89,7 +89,7 @@ Open count window: **Chemicals · Recycling · Recovery · Morning**. Load more 
 
 ## Operator tips on screen
 
-Purple tip cards can be dismissed with **Don’t show again**. They are temporary training aids — removing a tip from the app is done in code by deleting that note widget (`noteId`).
+Purple tip cards can be dismissed with **Don’t show again**. They are temporary training aids.
 
 ---
 
@@ -107,6 +107,5 @@ Purple tip cards can be dismissed with **Don’t show again**. They are temporar
 
 ## Related
 
-- In-app: Lurgi hub → **Operator guide** tile  
+- In-app: Lurgi hub → **Operator guide** tile, or Settings → Documentation
 - Pulse: `/lurgi` desk  
-- Map: `Components/Modules/cards/Lurgi.md`  

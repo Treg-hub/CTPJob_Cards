@@ -10,7 +10,9 @@
 
 As a manager, you are the quality gate for the job card system in your department. The system works well when the data going into it is accurate and complete. Your job is not just to review what is happening on the floor — it is to ensure that every job card created in your department meets the standard required to build a useful maintenance record over time.
 
-A job card with vague information is almost useless for analysis, reporting, or AI-assisted predictive maintenance in the future. A job card with precise, complete information becomes a permanent record that helps the business make better decisions.
+A job card with vague information is almost useless for analysis, reporting, or later AI-assisted tools. A job card with precise, complete information becomes a permanent record that helps the business make better decisions.
+
+Department managers with Pulse **jobCards** access can also use **CTP Pulse → Jobs** (and Manager desk `/jobs/desk`) for the same department picture on a larger screen. Press Live history is `/jobs/press-live`. Daily Review on the phone still pulses when your pending queue is large.
 
 ---
 
@@ -22,7 +24,7 @@ A job card with vague information is almost useless for analysis, reporting, or 
 | **Technician** | Receives the job card, attends to the fault, and closes it out with a completion note. |
 | **Manager** | Oversees all job cards in their department. Responsible for quality, escalation response, and pattern identification. |
 | **Admin** | Manages system configuration, employee accounts, and geofence settings. Job cards are never permanently wiped from the phone/app — cleanup is **soft-delete** (hidden from floor lists; retained for audit). |
-| **Security Manager** | Keeps this manager job-card Home **plus** Waste and Security tabs; Pulse desk for security oversight (see Site Security — Manager Guide). |
+| **Security Manager** | Keeps this manager job-card Home **plus** Waste and Security tabs; Pulse **Operations** for on-site + gate log (see Site Security — Manager Guide). |
 | **Security Guard** | Does **not** use this guide for day-to-day work — module hub home only (Site Security — Guard Guide). |
 
 > Operators and Technicians are distinct roles. An operator reports — a technician resolves. Ensuring operators understand the importance of complete job card entries is part of your responsibility as a manager.

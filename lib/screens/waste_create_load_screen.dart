@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../utils/persona_audit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -159,6 +160,9 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   Contractor? _selectedContractor;
   final Set<String> _selectedTypeIds = {};
   WasteSettings? _wasteSettings;
+  StreamSubscription<List<Contractor>>? _contractorsSub;
+  StreamSubscription<List<WasteType>>? _typesSub;
+  bool _draftRestored = false;
 
   // Items for this load (in-memory until save)
   final List<WasteItem> _items = [];
@@ -255,7 +259,12 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   List<WasteType> get _availableTypes {
     final c = _selectedContractor;
     if (c == null || c.wasteTypeIds.isEmpty) return const [];
-    return _wasteTypes.where((t) => c.wasteTypeIds.contains(t.id)).toList();
+    final list = _wasteTypes
+        .where((t) => c.wasteTypeIds.contains(t.id))
+        .toList()
+      ..sort((a, b) =>
+          a.chipLabel.toLowerCase().compareTo(b.chipLabel.toLowerCase()));
+    return list;
   }
 
   String _formatTime(TimeOfDay t) =>
@@ -290,12 +299,6 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
           .map((t) => t.mainType)
           .toSet();
       _items.removeWhere((item) => !allowed.contains(item.subtype));
-      // Auto-select contractor types except dual-bin (Copper Skins must be alone).
-      for (final type in _availableTypes) {
-        if (type.id != null && !type.isFixedTareDualBin) {
-          _selectedTypeIds.add(type.id!);
-        }
-      }
     });
     _refreshStockForSelection();
     _persistDraft();
@@ -353,6 +356,8 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _contractorsSub?.cancel();
+    _typesSub?.cancel();
     _driverCtrl.dispose();
     _vehicleRegCtrl.dispose();
     _trailerCtrl.dispose();
@@ -548,19 +553,28 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
   }
 
   Future<void> _loadData() async {
-    try {
-      final contractors = await _wasteService.watchContractors().first;
-      final types = await _wasteService.watchWasteTypes().first;
-      final settings = await _wasteService.getWasteSettings();
-      if (mounted) {
-        setState(() {
-          _contractors = contractors;
-          _wasteTypes = types;
-          _wasteSettings = settings;
-        });
-        await _restoreDraft();
-      }
-    } catch (_) {}
+    final settings = await _wasteService.getWasteSettings();
+    if (mounted) setState(() => _wasteSettings = settings);
+
+    _contractorsSub?.cancel();
+    _typesSub?.cancel();
+    _contractorsSub = _wasteService.watchContractors().listen((contractors) {
+      if (!mounted) return;
+      setState(() => _contractors = contractors);
+      _maybeRestoreDraft();
+    });
+    _typesSub = _wasteService.watchWasteTypes().listen((types) {
+      if (!mounted) return;
+      setState(() => _wasteTypes = types);
+      _maybeRestoreDraft();
+    });
+  }
+
+  void _maybeRestoreDraft() {
+    if (_draftRestored) return;
+    if (_contractors.isEmpty && _wasteTypes.isEmpty) return;
+    _draftRestored = true;
+    unawaited(_restoreDraft());
   }
 
   void _resetStockSelection() {
@@ -1107,7 +1121,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(
-                'Select one or more types for this load. Stock and new items are filtered to your selection.',
+                'Tap the types on this truck. Nothing is selected until you tap.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1134,7 +1148,7 @@ class _WasteLoadFormScreenState extends ConsumerState<WasteLoadFormScreen>
                   final selected =
                       type.id != null && _selectedTypeIds.contains(type.id);
                   return FilterChip(
-                    label: Text(type.mainType),
+                    label: Text(type.chipLabel),
                     selected: selected,
                     onSelected: (_) => _toggleWasteType(type),
                   );

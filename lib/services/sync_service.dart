@@ -123,6 +123,11 @@ class SyncService {
   // queue item concurrently.
   bool _isProcessing = false;
 
+  /// Set when [processNow] / [_processQueue] is called while a pass is already
+  /// running so the newly queued item is not left until the next connectivity
+  /// change.
+  bool _queueNeedsAnotherPass = false;
+
   /// Last sync error per queued fleet/waste item (`collection:id` → message).
   /// In-memory only — cleared on success or when the item leaves the queue.
   final Map<String, String> _queueLastErrors = {};
@@ -366,13 +371,19 @@ class SyncService {
   }
 
   Future<void> _processQueue() async {
-    if (_isProcessing) return;
+    if (_isProcessing) {
+      _queueNeedsAnotherPass = true;
+      return;
+    }
     if (_queueBox.isEmpty) return;
     _dedupeWasteQueue();
     _dedupeFleetQueue();
     _isProcessing = true;
     try {
-      await _processQueueInner();
+      do {
+        _queueNeedsAnotherPass = false;
+        await _processQueueInner();
+      } while (_queueNeedsAnotherPass && _queueBox.isNotEmpty);
     } finally {
       _isProcessing = false;
     }

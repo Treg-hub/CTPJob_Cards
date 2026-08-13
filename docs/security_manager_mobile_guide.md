@@ -24,7 +24,7 @@ Same flows as guards:
 - Vehicle scan in / out (**SEC-NNNN**)
 - On-foot visitor
 - Company car exit / return
-- On-site list
+- Same scan flows as guards (see **Site Security — Guard Guide** in Documentation for the full boom book, including On Site expand / Scan out)
 
 **Add company car cost** — available to you (`isSecurityCostManager`): pick a registered company car, category, amount, date, description.
 
@@ -44,8 +44,7 @@ Use Pulse for:
 
 | Task | Pulse hub |
 |------|-----------|
-| Gate log + entry detail | Operations |
-| Who is on site (desk view) | Operations → On site |
+| Who is on site (open visits) + gate log (In and Out on one row) | **Operations** (one page — no separate On site tab) |
 | Company car register + trips | Vehicles |
 | Company car spend | Costing |
 | CSV / XLSX exports | Reports |
@@ -56,6 +55,6 @@ Use Pulse for:
 
 ## Quick checklist
 
-1. **Morning** — Pulse Operations → On site + gate log filter.
+1. **Morning** — Pulse **Operations**: on-site list at the top, then gate log (search or load more).
 2. **During shift** — mobile scans at the gate; optional company car costs on mobile or Pulse Costing.
 3. **End of day** — Pulse Reports export if needed for audit.

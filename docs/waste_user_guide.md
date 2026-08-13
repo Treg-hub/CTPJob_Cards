@@ -25,7 +25,7 @@ This guide walks through **mobile field capture** in WasteTrack — recording st
 There are **two ways** a load starts. After loading, the path depends on the waste type:
 
 - **Weight-based and no-on-site-weight loads** → Pending Weighbridge → weighbridge document → Pending Cost Review → Completed.
-- **Quantity-only loads** (e.g. IBC Bins) → skip weighbridge → go straight to Pending Cost Review → Completed.
+- **Quantity-only loads** (IBC Bins, **Used Oil / Contaminated Oil in litres**) → skip weighbridge → go straight to Pending Cost Review → Completed.
 
 ```
   ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
@@ -46,7 +46,7 @@ There are **two ways** a load starts. After loading, the path depends on the was
                                          │
               ┌──────────────────────────┴──────────────────────────┐
               │  Weight-based / No-on-site-weight loads              │  Quantity-only loads
-              ▼                                                       │  (e.g. IBC Bins)
+              ▼                                                       │  (IBC Bins, oil litres)
    ┌─────────────────────┐                                           │
    │ Pending Weighbridge │                                           │
    │ Manager enters      │                                           │
@@ -68,13 +68,15 @@ There are **two ways** a load starts. After loading, the path depends on the was
 
 ## Waste item types
 
-When adding an item to a load, the form adapts to the waste type. There are three modes:
+When adding an item to a load, the form adapts to the waste type:
 
 | Mode | What guard enters | Weighbridge | Example types |
 |------|-------------------|-------------|---------------|
 | **Weight-based** | Weight (kg) + optional quantity | Required | Paper waste, copper offcuts |
 | **Quantity only** | Count only (no weight) | Skipped — goes straight to cost review | IBC Bins |
-| **No on-site weight** | Count only (no weight) | Still required — weight confirmed on ticket | Compactor bins, open bins, copper skins |
+| **Quantity only (litres)** | **Litres** | Skipped | Used oil, contaminated oil (may sit in IBCs; enter **litres**, not kg) |
+| **No on-site weight** | Count only (no weight) | Still required — weight confirmed on ticket | Compactor bins, open bins |
+| **Dual-bin fixed tare** | Gross Bin1 + Gross Bin2; net = total full − empty tares (Pulse settings) | Still required — ticket is commercial; site net is for deviation | Copper skins (skins-only load; no stock) |
 
 > The form automatically shows the correct fields for the selected type — you do not need to choose a mode manually.
 
@@ -130,7 +132,7 @@ Tap **+ New / Schedule** on the Loads tab.
 *All waste users (guard, manager, admin).*
 
 1. **Contractor** — select who is collecting (e.g. Glenpak).
-2. **Waste types** — tap one or more chips. All contractor types are pre-selected; deselect any you do not need. Stock and new items are **filtered to your selection**.
+2. **Waste types** — tap one or more chips. **None are selected until you tap** — pick only what is on this truck. Stock and new items are **filtered to your selection**. Mondi’s **Board / K4 bin** is its own chip (not the same as Open Bin).
 3. **On-site stock (optional)** — managers may pre-link stock when scheduling. For **IBC Bins** and **Copper Waste**, linking usually happens **on collection day** instead (see Step 3).
 4. **Expected date** — the day the truck is due. Time is not required.
 5. **Notes** — optional instructions for the guard.
@@ -181,6 +183,8 @@ When the contractor arrives:
    - Tap **Fresh item** to capture new material.
    - **Weight-based items:** enter weight in kg. Photos recommended.
    - **Quantity-only items** (e.g. IBC Bins): enter count only — no weight field.
+   - **Oil (Used / Contaminated):** enter **litres** — even if the oil sat in an IBC.
+   - **Copper skins:** two full-bin gross weights; empty-bin tares come from Pulse settings.
    - **No-on-site-weight items** (e.g. compactor bins): enter count — weight confirmed at weighbridge.
 5. **Loaded truck photos** — photograph the fully loaded truck before it leaves (recommended; required when Photos Required is on).
 6. **Driver signature** — capture when required by settings, or optional when off.
@@ -188,7 +192,7 @@ When the contractor arrives:
 
 **After submission:**
 - Weight-based or no-on-site-weight loads → **Pending Weighbridge**.
-- Quantity-only loads (IBC Bins) → **Pending Cost Review** (weighbridge skipped).
+- Quantity-only loads (IBC Bins, oil litres) → **Pending Cost Review** (weighbridge skipped).
 
 ---
 
@@ -211,10 +215,11 @@ The load moves to **Pending Cost Review**.
 
 Use **CTP Pulse → Waste → Review** (admin only):
 
-1. Each load shows **one cost line per waste type** (not per item).
-2. Edit **R/kg** per type; calculated total updates live.
-3. Confirm **Approved amount** and tap **Approve** — load becomes **Completed** with `cost_by_type` saved.
-4. **Copper Waste loads:** approving also records the sale in the copper module (audit transaction linked to the load).
+1. Each load shows **one cost line per waste type** (not per item). Basis is kg or litres.
+2. Choose **Cash** or **Account** (required — cash collections such as NSA oil).
+3. Edit rate per type; calculated total updates live. Adjust **Approved total** if cash received differs.
+4. Tap **Approve** — load becomes **Completed**.
+5. **Copper Waste loads:** approving also records the sale in the copper module.
 
 Reports and exports: **CTP Pulse → Waste**.
 
@@ -259,7 +264,9 @@ When the weighbridge weight is saved, the app compares:
 
 A **deviation** is flagged if the difference exceeds **5%** or **50 kg** (whichever applies first). Flagged loads show on Pulse weighbridge/review and in **Reports**. This is for management review — not an automatic rejection.
 
-> For **no-on-site-weight items** (compactor bins, copper skins), the on-site recorded weight is zero by design — only the weighbridge total is meaningful. Deviation will appear as 100% for these items; this is expected and can be ignored. Only the weighbridge weight is used for cost calculations.
+> For **no-on-site-weight items** (compactor bins), the on-site recorded weight is zero by design — only the weighbridge total is meaningful. Deviation may look extreme; costing uses the ticket weight.
+>
+> For **Copper Skins** (dual-bin fixed tare), site recorded weight is the **net** from two full-bin grosses minus configured empty bin weights. Deviation compares the ticket vs that net.
 
 ---
 
@@ -277,10 +284,13 @@ Configure types in **CTP Pulse → Settings → Waste → Waste Types** (Firesto
 
 | Flag | Behaviour |
 |------|-----------|
-| **Quantity only** (`isQuantityOnly`) | Count only on mobile; skips weighbridge → cost review |
+| **Quantity only** (`isQuantityOnly`) | Count or litres on mobile; skips weighbridge → cost review |
 | **No on-site weight** (`noSiteWeight`) | Count on mobile; weighbridge still required on Pulse |
+| **Dual-bin fixed tare** | Copper skins: two grosses minus empty tares; weighbridge still required |
 
-Leave both off for standard weight-based types.
+**Waste types catalogue** is admin-only on Pulse. **Contractors** are edited by Security Managers or Admins.
+
+Leave quantity-only and no-on-site-weight off for standard weight-based types.
 
 ---
 
@@ -308,7 +318,7 @@ Leave both off for standard weight-based types.
 - Removed from the app (2026-06-22). Use **CTP Pulse**. Pending loads show a handoff banner on mobile load detail.
 
 **Load went straight to Cost Review — no weighbridge step**
-- This is correct for quantity-only types (IBC Bins). The cost is calculated by count × rate, not by weight.
+- This is correct for quantity-only types (IBC Bins, used/contaminated oil in litres). Cost is count or litres × rate, not weighbridge kg.
 
 **Offline**
 - Photos, signatures, and load data queue locally. Tap the orange **cloud sync** banner to retry when back online.
@@ -326,7 +336,7 @@ Leave both off for standard weight-based types.
 - [ ] Check on-site stock banner / copper panel (optional)
 - [ ] Schedule load: contractor, waste types, expected date (pre-link stock optional)
 - [ ] On collection day: guard or manager links stock via **From stock** if not pre-linked
-- [ ] After guard submits: enter off-site weighbridge document when received *(not needed for IBC Bins)*
+- [ ] After guard submits: enter off-site weighbridge document when received *(not needed for IBC Bins or oil litres)*
 
 ### Guard — collection
 - [ ] Begin Collection on incoming load
@@ -334,13 +344,15 @@ Leave both off for standard weight-based types.
 - [ ] Driver details + confirm/add items
   - Weight-based: enter weight (photos optional but recommended)
   - IBC Bins / compactor bins: enter quantity only
+  - Oil: enter litres
+  - Copper skins: two bin grosses
 - [ ] At least one loaded-truck photo + driver signature when required
 - [ ] Submit Collection
 
 ### Manager — truck already here
 - [ ] New Load on the spot: contractor, types, items/stock
 - [ ] Finish loading: truck photos + signature
-- [ ] Enter weighbridge document when it arrives *(not needed for IBC Bins)*
+- [ ] Enter weighbridge document when it arrives *(not needed for IBC Bins or oil litres)*
 
 ### Admin (CTP Pulse)
 - [ ] Review queue: confirm R/kg **per waste type**
@@ -350,4 +362,4 @@ Leave both off for standard weight-based types.
 
 ---
 
-*CTP Waste Recovery · Mobile Field Guide · Updated 24 June 2026 · Pulse steps: waste_pulse_guide.md*
+*CTP Waste Recovery · Mobile Field Guide · Updated 13 August 2026 · Pulse steps: waste_pulse_guide.md*

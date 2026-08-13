@@ -13,7 +13,7 @@ A real-time digital maintenance management system. Explore every feature — fro
 |------|-------|
 | Priority Levels | 5 |
 | Escalation Stages | 4 |
-| Job-card roles | 4 (+ module roles: Security, Waste, Fleet, Ink) |
+| Job-card roles | 4 (+ modules: Security, Waste, Fleet, Ink, Lurgi, Impression Rollers) |
 | First Escalation | 5 min |
 
 ---
@@ -56,12 +56,15 @@ Live:
 - Copper Inventory module (clock-number restricted)
 - WasteTrack module (Security department field capture; managers on Pulse for weighbridge)
 - Site Security module (gate scan in/out, company cars, on-foot visitors — guards: module hub home, no job-card tiles)
-- Fleet Maintenance module (Hyster forklifts & grabs)
-- Ink Factory module (production stock inventory)
+- Fleet Maintenance module (Hyster forklifts & grabs — **no costing on the phone**)
+- Ink Factory module (operator capture: tanks, receive, IBC, production; managers on Pulse)
+- Lurgi hub (morning meters, chemicals, recycling, Daily Readings)
+- Impression Rollers hub (on-press map, build, IR/ESA)
+- Press Live and Press Manuals (when granted)
+- Department Requests (when granted)
 
 Planned:
-- Predictive maintenance AI
-- AI chatbot & manuals
+- Broader predictive maintenance and floor AI assistant (Pulse **AI Intelligence** already exists for granted admins on `/jobs/ai-intelligence`)
 
 ---
 
@@ -69,7 +72,7 @@ Planned:
 
 *Job-card roles plus module-specific access*
 
-Every employee's role controls what they can see and do. Three roles (Operator, Technician, Manager) are **inferred automatically** from the `position` field in each employee's profile — there is no separate role field to set. The **Admin role** is the exception: it is controlled by the `isAdmin` boolean field on the employee's Firestore document. To grant or revoke Admin, edit that field directly — no code change or app release is needed.
+Every employee's job-card role is **inferred** from the `position` field — there is no separate role field to set. **Admin** is granted in Factory Admin / Pulse Users (writes the server `admins` registry). Do **not** treat a tick on the employee profile as the source of Admin.
 
 **Site Security guards** (`isSiteSecurityGuardOnly`) use a **module hub** on Home — Waste + Security module cards only; no Create Job Card, My Work, or View Jobs. **Security managers** keep the standard job-card Home plus Security and Waste tabs. See the in-app **Site Security** guides under Documentation.
 
@@ -97,7 +100,7 @@ Full system access. Manages employee accounts, configures geofence boundaries, a
 
 **Key Screens:** Admin Screen · Geofence Editor · User Feedback · Employee Management · Settings (Modules)
 
-> **Admin access is controlled per user in Firestore.** Set `isAdmin: true` on an employee's Firestore document to grant Admin. No code change required — takes effect on next app launch by that user.
+> **Admin is granted per user in Factory Admin / Pulse Users** (server `admins` registry). It takes effect after the next token refresh / app launch.
 
 ### Authentication
 
@@ -467,14 +470,14 @@ Admins have access to all data across all departments plus system configuration 
 
 *Tracking maintenance, issues, and costs for Hyster forklifts and grabs — a separate module from production job cards.*
 
-Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is only visible once an admin turns it on in Fleet Settings and gives the relevant people a fleet role. It deliberately keeps forklift/grab work **separate** from plant breakdown job cards, with its own asset register and history.
+Fleet Maintenance is a self-contained module behind a **Home tile** (not a bottom-nav tab). It is only visible once an admin turns it on and the person is a **reporter or Hyster Mechanic**. It keeps forklift/grab work **separate** from plant breakdown job cards.
 
 ### What it does
 
 - **Issue reporting** — Operators and shift leads (in the departments an admin enables) report a problem on a specific forklift or grab: severity (Low / Medium / High / Out of Service), shift (auto-detected as day / night / weekend), a description, and up to three photos.
 - **Out-of-service alerts** — Reporting an asset *out of service* immediately push-notifies the Hyster mechanic and the cost manager(s) — or holds it in their notification inbox if they're off-site — and flags the asset with an orange **OOS** badge until the issue is resolved. High-severity issues go to the inbox without a push.
 - **Mechanic work log** — The mechanic works an "open issues" queue sorted by severity, acknowledges an issue, and resolves it by either logging the work or leaving a resolution note (out-of-service issues must be closed with a work record — a note alone is not accepted). Work records capture work type, labour hours, the machine hour-meter reading, parts used, and photos, are numbered `FM-NNNN` (short global sequence; legacy records keep `FM-YYYYMMDD-NNN`), and lock from editing 7 days after creation. The hour-meter reading is propagated to the asset so the next mechanic sees the last recorded hours.
-- **Cost tracking (managers only)** — The overseeing manager enters cost lines against an asset (parts / labour / invoice / other, with amount, invoice reference, and supplier), sees month and year-to-date spend per machine, and exports a full CSV. **The mechanic never sees cost amounts** — only a "Costs pending / Costs entered" label.
+- **Cost tracking (Pulse only)** — Cost managers enter spend on **CTP Pulse → Fleet → Costing**. **There is no Costs or Reports UI on the phone.** The mechanic never sees amounts — only a "Costs pending / Costs entered" label.
 - **Admin** — The forklift/grab register, the list of reporter departments, the cost-manager clock numbers, the asset and work types, and the module on/off switch are all managed in Fleet Settings.
 
 ### Roles
@@ -483,8 +486,8 @@ Fleet Maintenance is a self-contained module behind its own **Fleet** tab. It is
 |------|----------------------|-----------------|
 | **Fleet Mechanic** | Workshop department + "Hyster Mechanic" position | Log work, acknowledge and resolve issues (no money shown) |
 | **Fleet Reporter** | Your department is enabled in Fleet Settings | Report issues and track the ones you raised |
-| **Cost Manager** | Your clock number is on the cost-manager list | Enter costs, view spend reports, export CSV |
-| **Fleet Admin** | System admin | Manage the asset register and all Fleet settings |
+| **Cost Manager** | Clock number on the cost-manager list | Enter costs on **CTP Pulse** only |
+| **Fleet Admin** | System admin | Manage the asset register and Fleet settings on Pulse |
 
 ### On the management dashboard (CTP Pulse)
 
@@ -500,14 +503,14 @@ The Ink Factory module is a full stock-inventory system for raw materials, solve
 
 ### What it does
 
-- **Stock on hand** — Live balances and weighted-average costs for all 13 items: raw materials (ASP600, Sylowhite, Spray105, Claytone, Resink, Cellulose), solvent (Toloul), inks (Yellow, Red, Blue, Black — received as IBCs, never manufactured), and manufactured products (CoverWax, Gravure Binder).
-- **Receive Local** — List of outstanding local purchase orders (sent from Pulse); operator confirms quantity received per line. Ad-hoc receive without order remains as escape. Cost is entered later by a manager (deferred-cost pattern).
-- **Receive ink IBCs** — Operator scans the IBC barcode (GS1-128 / SSCC label), weight and colour are auto-filled from the scan. The audit register records every IBC number received.
-- **Consume IBC** — Transfers an IBC from the audit register into the tank. Records Toloul wash consumption and **auto-creates an IBC Bins on-site waste stock item** (by IBC number) for security to collect on a later load.
-- **Daily Readings** — Combined screen for ink meters and Toloul meter points. Enter all readings on one page with one submit.
-- **Production Run** — Operator picks a recipe (CoverWax or Gravure Binder) and a pot count. The screen previews inputs consumed and output produced; the run is recorded as consumption transactions for each input and a manufacture transaction for the output.
-- **Toloul Recovery** — Records solvent recovered from the Lurgi distillation. Previous recovery entries are shown below the form for context.
-- **IBC Register** — Searchable register of all ink IBCs with colour tabs (Yellow / Red / Blue / Black), receive date, order number, and CGNA number.
+- **Stock on hand** — Live balances for raw materials, solvents, inks, and manufactured products. Money figures are for managers on Pulse, not operators.
+- **Factory tank % full** — Hub cards for Y/R/B/K, Binder, Toloul (operations dips — not the ledger WAC).
+- **Receive Local** — Outstanding local purchase orders; operator confirms quantity. Signed RFO + Pastel numbers are captured on mobile before Pulse can mark an import/local order sent.
+- **Receive ink IBCs** — Scan barcode; weight and colour from the scan. After receive, capture the **delivery note** (photo + confirm paper DN number).
+- **Consume IBC** — Into tank; Toloul wash; **auto-creates an IBC Bins waste stock** item for Security.
+- **Daily Readings** — Ink meters and Toloul meters (also on the Lurgi hub).
+- **Production Run** — Recipe + pot count.
+- **Expected orders / IBC-pallet ETAs** — banners on the Ink hub.
 
 ### Daily Readings — ink meters + Toloul meters on one screen
 
@@ -524,7 +527,7 @@ The **Daily Readings** screen (Ink hub **Meter Readings** tile, and **Lurgi hub 
 | **Ink operator** | `department == "Ink Factory"` | All data entry: receive stock, meter readings, production, Toloul recovery, consume IBC |
 | **Ink manager** | position contains "manager" + Ink Factory, or Admin | All operator capture on mobile + full management on **CTP Pulse** (`/ink`): pending costs, revaluation, month-end count/report, recipes, supplier management, corrections |
 | **Lurgi operator** | `department == "Lurgi"` | **Lurgi hub**: Morning Round (utilities/water/air/geyser/tanks), Daily Readings (ink + Toloul meters), Ink Factory Recovery **view-only** |
-| **Admin** | `isAdmin: true` | Full access to all Ink Factory screens |
+| **Admin** | Admin grant (Users / `admins` registry) | Full access to Ink Factory screens |
 
 > **Operators never see money.** Weighted-average costs, stock values, and cost estimates on the Production Run screen are hidden from operators — only managers and admins see financial figures.
 

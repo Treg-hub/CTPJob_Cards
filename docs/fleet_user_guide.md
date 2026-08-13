@@ -1,12 +1,12 @@
 # CTP Fleet Maintenance — User Guide
 
-*For Fleet Reporters, Hyster Mechanics, and Cost Managers*
+*For Fleet Reporters and Hyster Mechanics on this phone. Cost managers use CTP Pulse.*
 
 ---
 
 ## What Is Fleet Maintenance?
 
-Fleet Maintenance is the module in the CTP Job Cards app used to track the upkeep of the **fleet machines (forks, grab or BT)** — separate from normal production job cards. It records faults reported on each machine, the work the mechanic does to fix them, and the costs the manager records against each asset.
+Fleet Maintenance tracks upkeep of **fleet machines (forks, grab or BT)** — separate from plant job cards. Floor staff report faults and log repairs **on this phone**. **Costs and spend reports are on CTP Pulse only** — there is no Costs or Reports screen in the mobile app.
 
 **Fault reports and fixes are kept separate.** A report can never be edited after it is submitted. The fix is a separate work record written by the mechanic, linked back to the report — so what was reported and what was done are always both visible, side by side.
 
@@ -16,32 +16,30 @@ This guide covers the four roles that operate Fleet Maintenance day-to-day:
 |------|-----------------|
 | **Fleet Reporter** | Report a problem on a machine (forks, grab or BT); track the issues you raised |
 | **Hyster Mechanic** | Acknowledge issues, log the work done, resolve issues |
-| **Cost Manager** | Record costs per asset, view spend reports, export CSV |
-| **Fleet Admin** | Manage the asset register and all Fleet settings |
+| **Cost Manager** | Enter spend and reports on **CTP Pulse** (not this phone) |
+| **Fleet Admin** | Asset register and Fleet settings on **Pulse** |
 
-> **Admin** users have full access to every Fleet screen plus the Fleet Settings configuration panel. Day-to-day Fleet settings and cancelling false-alarm reports are done in **Pulse** (the web admin app); mechanics and reporters use this mobile app only.
+> Mechanics and reporters use **this app**. Cost managers and admins use **CTP Pulse** (`/fleet`) for costing, the asset register, and settings. Cancelling false-alarm reports is also Pulse.
 
 ---
 
 ## Section 1: Accessing Fleet Maintenance
 
-Fleet Maintenance is reached from the **Fleet** tab in the app. If you do not see the Fleet tab:
+Open **Fleet** from a **Home tile** (not a bottom-nav tab). If you do not see it:
 
-- The module may not be switched on yet. An admin enables it in **Fleet Settings → Enable Fleet**.
-- Your account may not have a Fleet role. Fleet roles are based on your department, position, or clock number — contact an admin to be added.
+- The module may not be switched on. An admin enables Fleet in **Pulse → Fleet Settings**.
+- Your account may not have a Fleet floor role (reporter department or Hyster Mechanic). Contact an admin.
 
-The Fleet home screen is organised into role-based tabs. You will only see the tabs your role allows:
+What you see on the phone depends on role:
 
-| Tab | Who sees it |
-|-----|-------------|
-| **Issues** | Everyone with Fleet access |
-| **Work** | Mechanic + Admin |
-| **Costs** | Cost Manager + Admin |
-| **Reports** | Cost Manager + Admin |
-| **Assets** | Admin |
-| **Settings** | Admin |
+| View | Who sees it |
+|------|-------------|
+| **My reports / All open** | Reporters |
+| **To Fix / In progress / History** | Hyster Mechanic |
+| **Daily check** | Reporters (pre-use) |
+| **Costs / Reports / Assets / Settings** | **Not on mobile** — CTP Pulse |
 
-The **Issues** tab shows a live count badge of currently open issues.
+Hyster Mechanics may open straight into Fleet after login. Admins keep the normal Home (they are not auto-pushed into Fleet).
 
 ---
 
@@ -75,7 +73,7 @@ When a machine (forks, grab or BT) develops a fault:
 
 ## Section 3: For Hyster Mechanics — Working an Issue
 
-The mechanic sees all open issues in the **Issues** tab, sorted by severity (Out of Service first).
+The mechanic sees open issues under **To Fix**, sorted with Out of Service first.
 
 ### Step 1: Acknowledge
 
@@ -114,32 +112,22 @@ When the last open Out-of-Service issue on a machine is resolved, the orange **O
 
 ---
 
-## Section 4: For Cost Managers — Recording Costs
+## Section 4: For Cost Managers — Recording Costs (CTP Pulse)
 
-The **Costs** tab is where the overseeing manager records what was spent on each machine.
+Cost managers do **not** enter money in this mobile app. Open **CTP Pulse → Fleet → Costing**.
 
-### Adding a cost line
+1. Work the job queue (description, parts, photos).
+2. Add cost lines (parts, labour, invoice, other) or mark **No cost needed**.
+3. Use **General cost** for spend not tied to one mechanic job.
+4. Reports and CSV export are on Pulse **Reports**.
 
-1. Open the **Costs** tab and tap **Add Cost**.
-2. **Pick the asset.**
-3. Choose the **cost type** — parts, labour, invoice, or other.
-4. Enter the **amount**.
-5. Add an **invoice reference** and **supplier** if applicable.
-6. Tap **Save**.
-
-### Viewing reports
-
-The **Reports** tab shows:
-
-- **Month-to-date** and **year-to-date** spend per machine.
-- A breakdown of cost by category per asset.
-- **Export CSV** — download the full cost data for the selected period for your own records or accounting.
+See **Fleet Cost Manager Guide** in Documentation (same phone, if you have a cost-manager clock) or the Pulse Fleet guides.
 
 ---
 
 ## Section 5: For Admins — Fleet Settings
 
-Everything that configures the module lives in **Fleet Settings** (Admin only):
+Everything that configures the module lives in **CTP Pulse → Fleet Settings** (Admin only):
 
 - **Asset register** — add and edit the fleet machines (forks, grab or BT) (name, type, identifier).
 - **Reporter departments** — which departments are allowed to report issues.
@@ -147,7 +135,7 @@ Everything that configures the module lives in **Fleet Settings** (Admin only):
 - **Asset & work types** — the pick-lists used elsewhere in the module.
 - **Enable Fleet** — the master on/off switch for the whole module.
 
-Until Fleet is enabled and at least the reporter departments and asset register are configured, the Fleet tab stays hidden for everyone except admins.
+Until Fleet is enabled and reporter departments plus the asset register are configured, the Home **Fleet** tile stays hidden for floor users.
 
 ---
 
@@ -172,8 +160,8 @@ If you are **off site** when a Fleet notification is generated, it is held in yo
 
 ## Section 8: Troubleshooting
 
-**I cannot see the Fleet tab.**
-Either the module is not enabled yet (an admin must turn it on in Fleet Settings) or your account does not have a Fleet role. Contact an admin.
+**I cannot see the Fleet tile on Home.**
+Either the module is not enabled yet (an admin must turn it on in Pulse Fleet Settings) or your account does not have a Fleet floor role. Contact an admin.
 
 **I reported an Out-of-Service issue but no one was notified.**
 The mechanic and cost managers receive a push only when they are on site; otherwise the alert waits in their Notification Inbox. Confirm the cost-manager clock numbers and the mechanic are correctly configured in Fleet Settings.

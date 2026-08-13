@@ -18,6 +18,14 @@ const _allUserFacingRoles = <UserRole>{
 /// at the top.
 const List<DocEntry> docCatalog = [
   DocEntry(
+    id: 'security_guard_guide',
+    title: 'Site Security — Guard Guide',
+    description: 'Boom book: vehicles, on foot, on site, company cars, waste, tablet.',
+    icon: Icons.shield_outlined,
+    roles: _allUserFacingRoles,
+    requiresSecurity: true,
+  ),
+  DocEntry(
     id: 'employee_guide',
     title: 'Employee Guide',
     description: 'Onboarding, permissions, job-card workflow, notifications.',
@@ -85,7 +93,7 @@ const List<DocEntry> docCatalog = [
     id: 'fleet_user_guide',
     title: 'Fleet Maintenance User Guide',
     description:
-        'Reporting machine faults (forks, grab or BT), logging work, costs, and reports.',
+        'Home Fleet tile: report faults, daily checks, mechanic To Fix. Costs are on Pulse.',
     icon: Icons.forklift,
     roles: _allUserFacingRoles,
     requiresFleet: true,
@@ -107,20 +115,44 @@ const List<DocEntry> docCatalog = [
     requiresFleet: true,
   ),
   DocEntry(
-    id: 'security_guard_guide',
-    title: 'Site Security — Guard Guide',
-    description: 'Gate scans, module hub home, Waste tab — no job-card tiles.',
-    icon: Icons.shield_outlined,
-    roles: _allUserFacingRoles,
-    requiresSecurity: true,
-  ),
-  DocEntry(
     id: 'security_manager_mobile_guide',
     title: 'Site Security — Manager Guide',
-    description: 'Mobile scans + company car costs; Pulse desk for reports.',
+    description: 'Mobile scans + company car costs; Pulse Operations for gate log.',
     icon: Icons.admin_panel_settings_outlined,
     roles: {UserRole.manager, UserRole.admin},
     requiresSecurity: true,
+  ),
+  DocEntry(
+    id: 'fleet_cost_manager_guide',
+    title: 'Fleet Cost Manager Guide',
+    description: 'Enter spend on CTP Pulse Costing — not in this mobile app.',
+    icon: Icons.payments_outlined,
+    roles: {UserRole.manager, UserRole.admin},
+    requiresFleet: true,
+  ),
+  DocEntry(
+    id: 'lurgi_operator_guide',
+    title: 'Lurgi — Operator Guide',
+    description: 'Morning meters, Daily Readings, chemicals, recycling, recovery.',
+    icon: Icons.science_outlined,
+    roles: _allUserFacingRoles,
+    requiresLurgi: true,
+  ),
+  DocEntry(
+    id: 'impression_rollers_guide',
+    title: 'Impression Rollers — Floor Guide',
+    description: 'On-press map, remove/install, build, IR/ESA, send-out.',
+    icon: Icons.precision_manufacturing_outlined,
+    roles: _allUserFacingRoles,
+    requiresImpression: true,
+  ),
+  DocEntry(
+    id: 'ink_operator_guide',
+    title: 'Ink Factory — Operator Guide',
+    description: 'Tanks, receive, delivery notes, IBC consume, production. Pulse for costing.',
+    icon: Icons.opacity_outlined,
+    roles: _allUserFacingRoles,
+    requiresInk: true,
   ),
 ];
 
@@ -138,8 +170,10 @@ const List<DocEntry> docCatalog = [
 ///    base role matches. This keeps WasteTrack-specific guides away from
 ///    general job-card users (mechanics, operators from other departments).
 /// 4. `requiresFleet` — excluded unless the Fleet module is enabled and the
-///    user is a Fleet user. Mirrors the visibility of the Fleet tab.
-/// 5. `roles` — standard role membership check.
+///    user is a Fleet reporter, mechanic, or cost manager (cost managers
+///    use Pulse; they still get the cost-manager guide here).
+/// 5. `requiresLurgi` / `requiresImpression` / `requiresInk` — department / module gates.
+/// 6. `roles` — standard role membership check.
 List<DocEntry> docsForUser(
   Employee? employee, [
   FleetSettings? fleetSettings,
@@ -150,9 +184,13 @@ List<DocEntry> docsForUser(
   final admin = isAdmin(employee);
   final wasteUser = isWasteUser(employee, wasteSettings);
   final fleetUser = (fleetSettings?.fleetEnabled ?? false) &&
-      isFleetUser(employee, fleetSettings);
+      (isFleetUser(employee, fleetSettings) ||
+          isFleetCostManager(employee, fleetSettings));
   final securityUser = (securitySettings?.securityEnabled ?? false) &&
       canUseSecurityModule(employee, securitySettings);
+  final lurgiUser = isLurgiUser(employee);
+  final impressionUser = canAccessImpressionRollers(employee);
+  final inkUser = isInkUser(employee);
   final guardShell =
       isSiteSecurityGuardOnly(employee, securitySettings);
   return docCatalog.where((doc) {
@@ -168,6 +206,9 @@ List<DocEntry> docsForUser(
     if (doc.requiresWaste && !wasteUser) return false;
     if (doc.requiresFleet && !fleetUser) return false;
     if (doc.requiresSecurity && !securityUser) return false;
+    if (doc.requiresLurgi && !lurgiUser) return false;
+    if (doc.requiresImpression && !impressionUser) return false;
+    if (doc.requiresInk && !inkUser) return false;
     if (fleetUser &&
         !_canSeeFleetRoleGuide(doc.id, employee, fleetSettings, admin)) {
       return false;
@@ -197,6 +238,8 @@ bool _canSeeFleetRoleGuide(
       return admin || isFleetMechanic(employee, settings);
     case 'fleet_reporter_guide':
       return admin || isFleetReporter(employee, settings);
+    case 'fleet_cost_manager_guide':
+      return admin || isFleetCostManager(employee, settings);
     default:
       return true;
   }

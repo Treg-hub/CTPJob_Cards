@@ -234,7 +234,8 @@ class SecurityEntry {
       discScanCaptured: data['disc_scan_captured'] as bool? ?? false,
       driverLicenceScanCaptured:
           data['driver_licence_scan_captured'] as bool? ?? false,
-      driverIdNumber: data['driver_id_number'] as String?,
+      driverIdNumber: data['driver_id_number'] as String? ??
+          data['id_number'] as String?,
       occupantCount: (data['occupant_count'] as num?)?.toInt(),
       occupantsLeaving: (data['occupants_leaving'] as num?)?.toInt(),
       occupantDiscrepancy: data['occupant_discrepancy'] as bool? ?? false,

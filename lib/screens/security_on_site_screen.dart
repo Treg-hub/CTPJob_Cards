@@ -79,6 +79,7 @@ class _VehiclesTab extends StatefulWidget {
 class _VehiclesTabState extends State<_VehiclesTab> {
   final _searchCtrl = TextEditingController();
   String _query = '';
+  String? _expandedId;
 
   @override
   void dispose() {
@@ -94,7 +95,9 @@ class _VehiclesTabState extends State<_VehiclesTab> {
         : widget.entries.where((e) {
             return (e.vehicleReg ?? '').toLowerCase().contains(q) ||
                 (e.driverName ?? '').toLowerCase().contains(q) ||
-                (e.contractorName ?? '').toLowerCase().contains(q);
+                (e.contractorName ?? '').toLowerCase().contains(q) ||
+                (e.hostName ?? '').toLowerCase().contains(q) ||
+                (e.companyName ?? '').toLowerCase().contains(q);
           }).toList();
 
     final dateFmt = DateFormat('dd MMM yyyy HH:mm');
@@ -170,7 +173,15 @@ class _VehiclesTabState extends State<_VehiclesTab> {
                               ),
                             ),
                             for (final e in grouped[type]!) ...[
-                              _VehicleOnSiteCard(entry: e, dateFmt: dateFmt),
+                              _VehicleOnSiteCard(
+                                entry: e,
+                                dateFmt: dateFmt,
+                                expanded: _expandedId == e.id,
+                                onToggle: () => setState(() {
+                                  _expandedId =
+                                      _expandedId == e.id ? null : e.id;
+                                }),
+                              ),
                               const SizedBox(height: 8),
                             ],
                           ],
@@ -182,11 +193,30 @@ class _VehiclesTabState extends State<_VehiclesTab> {
   }
 }
 
+String _sinceLabel(DateTime? t) {
+  if (t == null) return '—';
+  final local = t.toLocal();
+  final now = DateTime.now();
+  if (local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day) {
+    return DateFormat('HH:mm').format(local);
+  }
+  return DateFormat('dd MMM HH:mm').format(local);
+}
+
 class _VehicleOnSiteCard extends StatelessWidget {
-  const _VehicleOnSiteCard({required this.entry, required this.dateFmt});
+  const _VehicleOnSiteCard({
+    required this.entry,
+    required this.dateFmt,
+    required this.expanded,
+    required this.onToggle,
+  });
 
   final SecurityEntry entry;
   final DateFormat dateFmt;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   IconData get _icon => switch (entry.entryType) {
         SecurityEntryType.companyCar => Icons.directions_car,
@@ -195,39 +225,125 @@ class _VehicleOnSiteCard extends StatelessWidget {
         _ => Icons.time_to_leave,
       };
 
+  void _openScanOut(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SecurityVehicleGateScreen(
+          mode: entry.entryType == SecurityEntryType.companyCar
+              ? SecurityVehicleGateMode.companyCar
+              : SecurityVehicleGateMode.visitor,
+          initialReg: entry.vehicleReg,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final flagged =
+        entry.discScanMissingFlag || entry.driverLicenceMissingFlag;
+    final people = entry.occupantCount;
+    final line1 = [
+      entry.vehicleReg ?? '—',
+      if (people != null) '$people ${people == 1 ? 'person' : 'people'}',
+    ].join(' · ');
+    final hostOrCompany = [
+      if ((entry.hostName ?? '').isNotEmpty) entry.hostName!,
+      if ((entry.companyName ?? '').isNotEmpty &&
+          entry.companyName != entry.hostName)
+        entry.companyName!,
+      if ((entry.contractorName ?? '').isNotEmpty) entry.contractorName!,
+    ].join(' · ');
+    final line2 = [
+      entry.driverName ?? entry.visitorName ?? '—',
+      if (hostOrCompany.isNotEmpty) hostOrCompany,
+    ].join(' · ');
+    final line3 = [
+      if (entry.loggedAt != null) 'Since ${_sinceLabel(entry.loggedAt)}',
+      if (entry.gateName != null) entry.gateName!,
+      if ((entry.purpose ?? '').isNotEmpty) entry.purpose!,
+    ].join(' · ');
+
     return Card(
-      child: ListTile(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SecurityVehicleGateScreen()),
-        ),
-        leading: CircleAvatar(
-          backgroundColor: kBrandOrange.withValues(alpha: 0.15),
-          child: Icon(_icon, color: kBrandOrange),
-        ),
-        title: Text(
-          entry.vehicleReg ?? '—',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(entry.driverName ?? entry.visitorName ?? '—'),
-            if (entry.contractorName != null)
-              Text(entry.contractorName!, style: const TextStyle(fontSize: 12)),
-            if (entry.gateName != null)
-              Text('Gate: ${entry.gateName}', style: const TextStyle(fontSize: 12)),
-            if (entry.loggedAt != null)
-              Text(
-                'Since ${dateFmt.format(entry.loggedAt!.toLocal())}',
-                style: const TextStyle(fontSize: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: kBrandOrange.withValues(alpha: 0.15),
+                    child: Icon(_icon, color: kBrandOrange),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                line1,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (flagged)
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(line2, style: const TextStyle(fontSize: 13)),
+                        if (line3.isNotEmpty)
+                          Text(line3, style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _openScanOut(context),
+                    child: const Text('Scan out'),
+                  ),
+                  _ForceSignOutButton(entry: entry),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.black54,
+                  ),
+                ],
               ),
+            ),
+          ),
+          if (expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _EntryDetailBlock(entry: entry, dateFmt: dateFmt),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: () => _openScanOut(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kBrandOrange,
+                    ),
+                    child: const Text('Scan out'),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
-        trailing: _ForceSignOutButton(entry: entry),
-        isThreeLine: true,
+        ],
       ),
     );
   }
@@ -244,6 +360,7 @@ class _VisitorsTab extends StatefulWidget {
 class _VisitorsTabState extends State<_VisitorsTab> {
   final _searchCtrl = TextEditingController();
   String _query = '';
+  String? _expandedId;
 
   @override
   void dispose() {
@@ -309,49 +426,202 @@ class _VisitorsTabState extends State<_VisitorsTab> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
                         final e = filtered[i];
-                        return Card(
-                          child: ListTile(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    SecurityVisitorSignOutScreen(entry: e),
-                              ),
-                            ),
-                            leading: CircleAvatar(
-                              backgroundColor: kBrandOrange.withValues(alpha: 0.15),
-                              child: const Icon(
-                                Icons.directions_walk,
-                                color: kBrandOrange,
-                              ),
-                            ),
-                            title: Text(
-                              e.visitorName ?? e.driverName ?? '—',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (e.hostName != null)
-                                  Text('Host: ${e.hostName}', style: const TextStyle(fontSize: 12)),
-                                if (e.companyName != null)
-                                  Text(e.companyName!, style: const TextStyle(fontSize: 12)),
-                                if (e.gateName != null)
-                                  Text('Gate: ${e.gateName}', style: const TextStyle(fontSize: 12)),
-                                if (e.loggedAt != null)
-                                  Text(
-                                    'Since ${dateFmt.format(e.loggedAt!.toLocal())}',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                              ],
-                            ),
-                            trailing: _ForceSignOutButton(entry: e),
-                            isThreeLine: true,
-                          ),
+                        return _VisitorOnSiteCard(
+                          entry: e,
+                          dateFmt: dateFmt,
+                          expanded: _expandedId == e.id,
+                          onToggle: () => setState(() {
+                            _expandedId = _expandedId == e.id ? null : e.id;
+                          }),
                         );
                       },
                     ),
         ),
+      ],
+    );
+  }
+}
+
+class _VisitorOnSiteCard extends StatelessWidget {
+  const _VisitorOnSiteCard({
+    required this.entry,
+    required this.dateFmt,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final SecurityEntry entry;
+  final DateFormat dateFmt;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  void _openSignOut(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SecurityVisitorSignOutScreen(entry: entry),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final line2 = [
+      if ((entry.companyName ?? '').isNotEmpty) entry.companyName!,
+      if ((entry.hostName ?? '').isNotEmpty) 'Host: ${entry.hostName}',
+    ].join(' · ');
+    final line3 = [
+      if (entry.loggedAt != null) 'Since ${_sinceLabel(entry.loggedAt)}',
+      if (entry.gateName != null) entry.gateName!,
+      if ((entry.purpose ?? '').isNotEmpty) entry.purpose!,
+    ].join(' · ');
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: kBrandOrange.withValues(alpha: 0.15),
+                    child: const Icon(Icons.directions_walk, color: kBrandOrange),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          entry.visitorName ?? entry.driverName ?? '—',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        if (line2.isNotEmpty)
+                          Text(line2, style: const TextStyle(fontSize: 13)),
+                        if (line3.isNotEmpty)
+                          Text(line3, style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _openSignOut(context),
+                    child: const Text('Sign out'),
+                  ),
+                  _ForceSignOutButton(entry: entry),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.black54,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _EntryDetailBlock(entry: entry, dateFmt: dateFmt),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: () => _openSignOut(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kBrandOrange,
+                    ),
+                    child: const Text('Sign out'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EntryDetailBlock extends StatelessWidget {
+  const _EntryDetailBlock({required this.entry, required this.dateFmt});
+
+  final SecurityEntry entry;
+  final DateFormat dateFmt;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <String, String>{
+      if ((entry.purpose ?? '').isNotEmpty) 'Purpose': entry.purpose!,
+      if ((entry.hostName ?? '').isNotEmpty) 'Host': entry.hostName!,
+      if ((entry.companyName ?? '').isNotEmpty) 'Company': entry.companyName!,
+      if ((entry.contractorName ?? '').isNotEmpty)
+        'Contractor': entry.contractorName!,
+      if (entry.occupantCount != null)
+        'Occupants': '${entry.occupantCount}',
+      if ((entry.vehicleMake ?? '').isNotEmpty) 'Make': entry.vehicleMake!,
+      if ((entry.vehicleColour ?? '').isNotEmpty)
+        'Colour': entry.vehicleColour!,
+      if ((entry.destinationAddress ?? '').isNotEmpty)
+        'Destination': entry.destinationAddress!,
+      if ((entry.employeeClockNo ?? '').isNotEmpty ||
+          (entry.employeeName ?? '').isNotEmpty)
+        'Employee':
+            [entry.employeeName, entry.employeeClockNo].whereType<String>().join(' · '),
+      if ((entry.driverIdNumber ?? '').isNotEmpty)
+        'ID number': entry.driverIdNumber!,
+      if (entry.loggedAt != null)
+        'Signed in': dateFmt.format(entry.loggedAt!.toLocal()),
+      if ((entry.gateName ?? '').isNotEmpty) 'Gate': entry.gateName!,
+      if ((entry.loggedByName ?? entry.loggedByClockNo ?? '').isNotEmpty)
+        'Logged by': entry.loggedByName ?? entry.loggedByClockNo!,
+    };
+    final flags = <String>[
+      if (entry.discScanMissingFlag) 'Disc not scanned',
+      if (entry.driverLicenceMissingFlag) 'Licence not scanned',
+      if (entry.idScanCaptured) 'ID scanned',
+      if (entry.discScanCaptured) 'Disc scanned',
+      if (entry.driverLicenceScanCaptured) 'Licence scanned',
+      if ((entry.overrideReason ?? '').isNotEmpty)
+        'Override: ${entry.overrideReason}',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final e in rows.entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 96,
+                  child: Text(
+                    e.key,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(e.value, style: const TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+          ),
+        if (flags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              flags.join(' · '),
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
       ],
     );
   }
