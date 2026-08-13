@@ -24,7 +24,9 @@ Auth for the app is **always in-app** (not App Distribution, not the landing reg
 
 ```text
 1. Bump pubspec + CHANGELOG
-2. flutter build apk --target-platform android-arm64 --release
+2. $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
+   flutter build apk --target-platform android-arm64 --release
+   (or pwsh .\scripts\invoke-flutter-release-apk.ps1)
 3. pwsh .\scripts\publish-landing-apk.ps1   (Storage upload + thin landing)
 4. Browser: open canonical Storage URL → must download ~45–50 MB
 5. Admin → Shared download URL = canonical URL above (set once; keep forever)

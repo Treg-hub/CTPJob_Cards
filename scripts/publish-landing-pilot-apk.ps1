@@ -31,11 +31,7 @@ Write-Host "    App root: $AppRoot"
 Write-Host "    Pilot URL: $script:PilotApkUrl"
 
 if ($BuildApk) {
-  Write-Host "==> Building release APK (arm64)..." -ForegroundColor Cyan
-  flutter build apk --target-platform android-arm64 --release
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "flutter build apk failed (exit $LASTEXITCODE). Not publishing."
-  }
+  & (Join-Path $PSScriptRoot "invoke-flutter-release-apk.ps1")
 }
 
 if (-not (Test-Path $ApkSrc)) {
