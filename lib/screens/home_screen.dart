@@ -158,7 +158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Site Security — cached settings loaded once in initState
   SecuritySettings? _cachedSecuritySettings;
 
-  /// Press Live home tile — admin or settings/press_live_access clock list.
+  /// Press Live home tile — admin or settings/press_live_access (clock, department, or position).
   bool _canViewPressLive = false;
 
   /// Press Manuals — isAdmin + optional flags from settings/press_manuals_access.
