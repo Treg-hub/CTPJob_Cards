@@ -6,6 +6,17 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-13 — 2.3.0+209 — On Site, waste types, and guides
+
+### What you will notice
+
+- **On Site** cards show three lines; tap to expand. **Scan out** and **Sign out** are on the card.
+- When you **schedule a waste load**, waste-type chips start **empty** — tap only what is on the truck. Mondi’s **Board / K4 bin** is its own chip (not the same as Open Bin).
+- Scheduling a load should **upload on its own** when you have signal; you should not need Queued Operations for a normal save.
+- Settings → **Documentation** includes **Ink Factory**, **Lurgi**, and **Impression Rollers** guides (when those modules apply to you), plus the Site Security boom book.
+
+---
+
 ## 2026-08-13 — 2.3.0+208 — Waste oil litres
 
 ### What you will notice
