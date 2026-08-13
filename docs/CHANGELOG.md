@@ -6,6 +6,15 @@ The role guides, the onboarding flow, and the reference docs all draw from this 
 
 ---
 
+## 2026-08-13 — 2.3.0+208 — Waste oil litres
+
+### What you will notice
+
+- **Used Oil** and **Contaminated Oil** collections use **litres** (type the quantity; no weighbridge for those loads).
+- If you use **Press Live**, a manager can turn it on for your department or job title.
+
+---
+
 ## 2026-08-12 — 2.3.0+207 — Press Live work codes
 
 ### What you will notice
